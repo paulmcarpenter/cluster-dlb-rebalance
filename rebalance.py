@@ -1,18 +1,37 @@
 #! /usr/bin/env python
 import sys
-import numpy as np
 import cvxopt
 from cvxopt import matrix, solvers
+
+
+def myblock(l):
+    # numpy didn't work on MareNostrum!!!
+    newm = []
+    print l
+    for blockrow in l:
+        print 'row', blockrow
+        assert len(blockrow) >= 1
+        nrows,ncol0 = blockrow[0].size
+        for row in range(0,nrows):
+            r = []
+            for m in blockrow:
+                r.extend( list(m[row,:]))
+            newm.append(r)
+    return matrix(newm).trans()
+
+def zeros(rows,cols):
+    return matrix(0, (rows,cols))
+
+
+
 
 ni = 4 # Number of Nanos6@cluster instances
 nn = 4 # Total number of nodes
 
 # Each row is an instance, each column is a node
-B = np.array( [[1,1,0,0], [0,1,1,0], [0,0,1,1], [1,0,0,1] ] )
-
-L = np.array( [[10],[20],[5],[10]])
-
-C = np.array( [[48],[48],[48],[48]])
+B = matrix( [[1,1,0,0], [0,1,1,0], [0,0,1,1], [1,0,0,1] ] ).trans()  # cvxopt builds matrix by columns
+L = matrix( [[10],[20],[5],[10]]).trans()
+C = matrix( [[48],[48],[48],[48]]).trans()
 
 # Minimise      -t                                        (i.e. maximise worst-case cores per load)
 #
@@ -27,7 +46,7 @@ C = np.array( [[48],[48],[48],[48]])
 # Variables are t, node0instance0, node0instance1, ... , node1instance0, ...
 
 # Objective function to minimise: t
-c = np.array( [[-1.0]] + [[0.0]] * ni * nn)
+c = matrix( [[-1.0]] + [[0.0]] * ni * nn).trans()
 
 # LHS of constraints: one per node and one per instance
 Ali = []
@@ -50,19 +69,23 @@ for node in range(0,nn):
         row[node*ni + instance] = -1.0
         Alp.append(row)
 
-A = np.block( [ [np.zeros((nn,1)), np.array(Ali)],
-                [L,            np.array(Aln)],
-                [np.zeros((nn*ni,1)), np.array(Alp)]])
-#print(A)
+A = myblock( [ [zeros(nn,1),    matrix(Ali).trans()],
+               [L,              matrix(Aln).trans()],
+               [zeros(nn*ni,1), matrix(Alp).trans()]])
+print 'A', A.size
+print(A)
 
 # RHS of constraints
-b = np.block( [ [C],
-                [np.zeros((ni,1))],
-                [np.zeros((nn*ni,1))]] )
-#print (b)
-#print(matrix(c))
+b = 1.0 * myblock( [ [C],
+                   [zeros(ni,1)],
+                   [zeros(nn*ni,1)]] )
+print 'b', b.size
+print (b)
+print 'c', c.size
+print(c)
 
-sol = solvers.lp( matrix(c), matrix(A), matrix(b) )
+
+sol = solvers.lp( c, A, b)
 #print(sol['x'])
 
 

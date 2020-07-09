@@ -1,4 +1,4 @@
-BINARIES=rebalance fakeruntime
+BINARIES=fakeruntime
 
 all:${BINARIES}
 
