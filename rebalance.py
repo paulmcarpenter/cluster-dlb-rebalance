@@ -30,6 +30,7 @@ def read_current_alloc():
     fnames = listdir('.balance')
     max_instance = 0
     max_node = 0
+    ranks = {}
     allocs = {}
     loads = {}
     for fname in fnames:
@@ -42,14 +43,15 @@ def read_current_alloc():
             print 'matching', fname, instance, node
             f = open('.balance/' + fname)
             l = f.readline().strip().split(' ')
-            allocs[ (instance,node) ] = int(l[0])
-            loads[ (instance,node) ] = int(l[1])
+            ranks[ (instance,node) ] = int(l[0])
+            allocs[ (instance,node) ] = int(l[1])
+            loads[ (instance,node) ] = int(l[2])
             f.close()
         
-    return max_instance+1, max_node+1, allocs, loads
+    return max_instance+1, max_node+1, ranks, allocs, loads
     
 
-ni, nn, allocs, loads = read_current_alloc()
+ni, nn, ranks, allocs, loads = read_current_alloc()
 print 'ni =', ni
 print 'nn =', nn
 print 'allocs =', allocs

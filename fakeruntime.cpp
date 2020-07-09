@@ -51,7 +51,7 @@ class NanosInstance
                     sprintf(filename, ".balance/load-%d-%d", _instanceNum, _nodes[rank]);
                     std::ofstream myfile;
                     myfile.open(filename);
-                    myfile << _cores[rank] << " " << nodeLoad;
+                    myfile << rank << " " << _cores[rank] << " " << nodeLoad;
                     myfile.close();
                 }
 
