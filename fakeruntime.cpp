@@ -33,7 +33,7 @@ class NanosInstance
                 std::cout << " " << _instanceNum << " " << _nodes[i] << "\n";
             }
 
-            for(int iter = 0; iter < 10; iter++)
+            for(int iter = 0; iter < 1000; iter++)
             {
                 // Calculate total number of cores
                 int totalCores = 0;
@@ -115,6 +115,15 @@ NanosInstance::NanosInstance(int instanceNum, int totalLoad, int numRanks, ...)
     for (int i=0; i<numRanks; i++)
     {
         _nodes[i] = va_arg(args, int);
+
+        // Reset allocation for the rank
+        char filename[1024];
+        sprintf(filename, ".balance/alloc-%d-%d", _instanceNum, _nodes[i]);
+        std::ofstream myfile;
+        myfile.open(filename);
+        myfile << ((i==0)?48:0) << "\n";
+        myfile.close();
+
         _cores[i] = 0;
     }
     _cores[0] = TOTAL_CORES_PER_NODE;
@@ -122,7 +131,6 @@ NanosInstance::NanosInstance(int instanceNum, int totalLoad, int numRanks, ...)
 
     rc = pthread_create(&_thread, NULL, instance_thread, (void *)this);
 
-    std::cout << "hello\n";
     if (rc) 
     {
         std::cout << "Unable to create thread\n";
