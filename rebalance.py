@@ -148,6 +148,36 @@ def optimize(ni, nn, L, B, C):
     return opt_allocs
 
 
+def make_integer(ni, nn, allocs, L, B, C):
+    int_allocs = {}
+    for node in range(0,nn):
+        indices = [instance for instance in range(0,ni) if B[(instance,node)]>0 and int(allocs[(instance,node)]) != allocs[(instance,node)] ]
+
+        ncores      = [allocs[(instance,node)] for instance in indices]
+        ncores_int  = [int(allocs[(instance,node)]) for instance in indices]
+        total_cores = [sum([allocs[(instance,n)] for n in range(0,nn) if B[(instance,n)]>0]) for instance in indices]
+        # load_per_cores = [L[indices[j]] / total_cores[j] for j in range(0,len(total_cores))]
+        # print 'node', node, 'indices', indices, 'cores', ncores, 'total_cores', total_cores, 'lpc', load_per_cores
+
+        # After rebalancing, all instances should have the same load-per-core
+        # Hence the slowdown is proportional to the fraction lost: (ncores - int(ncores)) / total_cores
+        frac_lost_and_j = [(1.0 * (ncores[j] - int(ncores[j])) / total_cores[j],j) for j in range(0,len(total_cores))]
+        # print 'node', node, 'indices', indices, 'cores', ncores, 'total_cores', total_cores, 'frac_lost', frac_lost_and_j
+        # print 'ncores_int', ncores_int
+
+        extra_cores = C[instance] - sum(ncores_int)
+        # print 'extra_cores', extra_cores
+        for c in range(0,extra_cores):
+            frac,j = frac_lost_and_j[c]
+            ncores_int[j] = ncores_int[j] + 1
+
+        for instance in range(0,ni):
+            int_allocs[(instance,node)] = 0
+        for j,instance in enumerate(indices):
+            int_allocs[(instance,node)] = ncores_int[j]
+    return int_allocs
+
+
 
 
 
@@ -194,6 +224,10 @@ opt_allocs = optimize(ni, nn, L, B, C)
 print 'Optimized allocation'
 printout(ni,nn,ranks,opt_allocs,L)
 
-write_new_alloc(ni, nn, B, opt_allocs)
+integer_allocs = make_integer(ni, nn, opt_allocs, L, B, C)
+print 'Integer allocation'
+printout(ni,nn,ranks,integer_allocs,L)
+
+write_new_alloc(ni, nn, B, integer_allocs)
 
 
