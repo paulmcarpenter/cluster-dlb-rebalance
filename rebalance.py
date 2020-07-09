@@ -1,7 +1,10 @@
 #! /usr/bin/env python
 import sys
 import cvxopt
+import re
 from cvxopt import matrix, solvers
+
+from os import listdir
 
 
 def myblock(l):
@@ -22,6 +25,36 @@ def myblock(l):
 def zeros(rows,cols):
     return matrix(0, (rows,cols))
 
+
+def read_current_alloc():
+    fnames = listdir('.balance')
+    max_instance = 0
+    max_node = 0
+    allocs = {}
+    loads = {}
+    for fname in fnames:
+        m = re.match(r'load-([0-9*])-([0-9]*)', fname)
+        if m:
+            instance = int(m.group(1))
+            node = int(m.group(2))
+            max_instance = max(instance, max_instance)
+            max_node = max(node, max_node)
+            print 'matching', fname, instance, node
+            f = open('.balance/' + fname)
+            l = f.readline().strip().split(' ')
+            allocs[ (instance,node) ] = int(l[0])
+            loads[ (instance,node) ] = int(l[1])
+            f.close()
+        
+    return max_instance+1, max_node+1, allocs, loads
+    
+
+ni, nn, allocs, loads = read_current_alloc()
+print 'ni =', ni
+print 'nn =', nn
+print 'allocs =', allocs
+print 'loads =', loads
+sys.exit(1)
 
 
 
