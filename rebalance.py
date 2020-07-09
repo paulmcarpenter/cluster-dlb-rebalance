@@ -40,7 +40,6 @@ def read_current_alloc():
             node = int(m.group(2))
             max_instance = max(instance, max_instance)
             max_node = max(node, max_node)
-            print 'matching', fname, instance, node
             f = open('.balance/' + fname)
             l = f.readline().strip().split(' ')
             ranks[ (instance,node) ] = int(l[0])
@@ -50,23 +49,72 @@ def read_current_alloc():
         
     return max_instance+1, max_node+1, ranks, allocs, loads
     
+def printout(ni,nn,ranks,allocs,L):
+    print '           ' + ' ' * 5 * nn + 'NUM CORES ' + ' ' * 5 * nn + 'Total_cores   Load   Load/Total_cores'
+    print '           ' + ' ' * 5 * nn + '   node   ' + ' ' * 5 * nn + '    '
+    print '           ' + ('%10d' * nn) % tuple(range(0,nn))
+
+    for instance in range(0, ni):
+        print 'Instance %2d' % instance,
+        for node in range(0, nn):
+            print '%10.2f' % allocs[(instance,node)],
+        load = L[instance,0]
+        total_c = 0
+        for node in range(0, nn):
+            total_c += allocs[(instance,node)]
+        print '%10.2f' % total_c,
+        print '%10.2f' % load,
+        print '%10.2f' % (load/total_c)
+
+
+    used = []
+    for node in range(0,nn):
+        u = 0
+        for instance in range(0,ni):
+            u += allocs[(instance,node)]
+        used.append(u)
+    print '           ' + ('%10s' % '---') * nn
+    print '           ' + ('%10.2f' * nn) % tuple(used)
+
 
 ni, nn, ranks, allocs, loads = read_current_alloc()
-print 'ni =', ni
-print 'nn =', nn
-print 'allocs =', allocs
-print 'loads =', loads
-sys.exit(1)
+# print 'ni =', ni
+# print 'nn =', nn
+# print 'allocs =', allocs
+# print 'loads =', loads
+Ll = []
+Brows = []
+for instance in range(0,ni):
+    load = 0
+    Brow = []
+    for node in range(0,nn):
+        if (instance,node) in loads:
+            load += 1.0 * loads[(instance,node)]
+            Brow.append(1.0)
+        else:
+            loads[(instance,node)] = 0.0
+            allocs[(instance,node)] = 0.0
+            Brow.append(0.0)
+    Ll.append(load)
+    Brows.append(Brow)
+
+# Load vector
+L = matrix(Ll)
+print(L)
+
+# Topology matrix
+B = matrix(Brows).trans()
+print(B)
+
+# Available cores vector
+C = matrix( [[48]] * nn).trans()
+print(C)
+
+printout(ni,nn,ranks,allocs,L)
 
 
 
-ni = 4 # Number of Nanos6@cluster instances
-nn = 4 # Total number of nodes
 
-# Each row is an instance, each column is a node
-B = matrix( [[1,1,0,0], [0,1,1,0], [0,0,1,1], [1,0,0,1] ] ).trans()  # cvxopt builds matrix by columns
-L = matrix( [[10],[20],[5],[10]]).trans()
-C = matrix( [[48],[48],[48],[48]]).trans()
 
 # Minimise      -t                                        (i.e. maximise worst-case cores per load)
 #
