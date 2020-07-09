@@ -48,7 +48,7 @@ class NanosInstance
                 {
                     double nodeLoad = (double)_totalLoad * _cores[rank] / totalCores;
                     char filename[1024];
-                    sprintf(filename, ".balance/load-%d-%d", _instanceNum, rank);
+                    sprintf(filename, ".balance/load-%d-%d", _instanceNum, _nodes[rank]);
                     std::ofstream myfile;
                     myfile.open(filename);
                     myfile << _cores[rank] << " " << nodeLoad;
@@ -59,7 +59,7 @@ class NanosInstance
                 for (int rank=0; rank<_numRanks; rank++)
                 {
                     char filename[1024];
-                    sprintf(filename, ".balance/alloc-%d-%d", _instanceNum, rank);
+                    sprintf(filename, ".balance/alloc-%d-%d", _instanceNum, _nodes[rank]);
                     std::ifstream myfile;
                     myfile.open(filename);
                     if (myfile.is_open())
@@ -125,7 +125,8 @@ NanosInstance::NanosInstance(int instanceNum, int totalLoad, int numRanks, ...)
     std::cout << "hello\n";
     if (rc) 
     {
-        std::cout << "Unable to create thread " << rc << " (EAGAIN=" << EAGAIN << " EINVAL=" << EINVAL << " EPERM=" << EPERM << "\n";
+        std::cout << "Unable to create thread\n";
+        std::cout << "If it failed on login node, try ulimit -s 209715\n";
         assert(false);
     }
 }
