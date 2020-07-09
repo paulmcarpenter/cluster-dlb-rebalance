@@ -151,25 +151,30 @@ def optimize(ni, nn, L, B, C):
 def make_integer(ni, nn, allocs, L, B, C):
     int_allocs = {}
     for node in range(0,nn):
-        indices = [instance for instance in range(0,ni) if B[(instance,node)]>0 and int(allocs[(instance,node)]) != allocs[(instance,node)] ]
+        indices = [instance for instance in range(0,ni) if B[(instance,node)]>0 and allocs[(instance,node)] > 0 ]
 
-        ncores      = [allocs[(instance,node)] for instance in indices]
-        ncores_int  = [int(allocs[(instance,node)]) for instance in indices]
-        total_cores = [sum([allocs[(instance,n)] for n in range(0,nn) if B[(instance,n)]>0]) for instance in indices]
-        # load_per_cores = [L[indices[j]] / total_cores[j] for j in range(0,len(total_cores))]
-        # print 'node', node, 'indices', indices, 'cores', ncores, 'total_cores', total_cores, 'lpc', load_per_cores
+        if len(indices) > 0:
+            ncores      = [allocs[(instance,node)] for instance in indices]
+            ncores_int  = [int(allocs[(instance,node)]) for instance in indices]
+            total_cores = [sum([allocs[(instance,n)] for n in range(0,nn) if B[(instance,n)]>0]) for instance in indices]
+            # load_per_cores = [L[indices[j]] / total_cores[j] for j in range(0,len(total_cores))]
+            # print 'node', node, 'indices', indices, 'cores', ncores, 'total_cores', total_cores, 'lpc', load_per_cores
 
-        # After rebalancing, all instances should have the same load-per-core
-        # Hence the slowdown is proportional to the fraction lost: (ncores - int(ncores)) / total_cores
-        frac_lost_and_j = [(1.0 * (ncores[j] - int(ncores[j])) / total_cores[j],j) for j in range(0,len(total_cores))]
-        # print 'node', node, 'indices', indices, 'cores', ncores, 'total_cores', total_cores, 'frac_lost', frac_lost_and_j
-        # print 'ncores_int', ncores_int
+            # After rebalancing, all instances should have the same load-per-core
+            # Hence the slowdown is proportional to the fraction lost: (ncores - int(ncores)) / total_cores
+            frac_lost_and_j = [(1.0 * (ncores[j] - int(ncores[j])) / total_cores[j],j) for j in range(0,len(total_cores))]
+            # print 'node', node, 'indices', indices, 'cores', ncores, 'total_cores', total_cores, 'frac_lost', frac_lost_and_j
+            # print 'ncores_int', ncores_int
+            frac_lost_and_j.sort()
+            frac_lost_and_j.reverse()
 
-        extra_cores = C[instance] - sum(ncores_int)
-        # print 'extra_cores', extra_cores
-        for c in range(0,extra_cores):
-            frac,j = frac_lost_and_j[c]
-            ncores_int[j] = ncores_int[j] + 1
+            extra_cores = C[instance] - sum(ncores_int)
+            # print 'extra_cores', extra_cores
+            for c in range(0,extra_cores):
+                # Sometimes it is not necessary to use all cores: in this case we just keep going
+                # filling up the available cores anyway
+                frac,j = frac_lost_and_j[c % len(frac_lost_and_j)]
+                ncores_int[j] = ncores_int[j] + 1
 
         for instance in range(0,ni):
             int_allocs[(instance,node)] = 0
@@ -183,6 +188,7 @@ def make_integer(ni, nn, allocs, L, B, C):
 
 
 ni, nn, ranks, allocs, loads = read_current_alloc()
+
 # print 'ni =', ni
 # print 'nn =', nn
 # print 'allocs =', allocs
@@ -205,22 +211,23 @@ for instance in range(0,ni):
 
 # Load vector
 L = matrix(Ll)
-# print(L)
 
 # Topology matrix
 B = matrix(Brows).trans()
-# print(B)
 
 # Available cores vector
 C = matrix( [[48]] * nn).trans()
-# print(C)
-
 print 'Current allocation'
 printout(ni,nn,ranks,allocs,L)
 
+if max(L) == 0.0:
+    # Currently no work!!!
+    opt_allocs = allocs
+    print 'No work!'
+else:
+    opt_allocs = optimize(ni, nn, L, B, C)
 
-#print(sol['x'])
-opt_allocs = optimize(ni, nn, L, B, C)
+
 print 'Optimized allocation'
 printout(ni,nn,ranks,opt_allocs,L)
 
