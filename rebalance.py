@@ -40,13 +40,25 @@ def read_current_alloc():
             max_node = max(node, max_node)
             f = open('.balance/' + fname)
             l = f.readline().strip().split(' ')
+            print l
             ranks[ (instance,node) ] = int(l[0])
-            allocs[ (instance,node) ] = int(l[1])
-            loads[ (instance,node) ] = int(l[2])
+            allocs[ (instance,node) ] = float(l[1])
+            loads[ (instance,node) ] = float(l[2])
             f.close()
         
     return max_instance+1, max_node+1, ranks, allocs, loads
     
+def write_new_alloc(ni, nn, B, opt_allocs):
+    for instance in range(0,ni):
+        for node in range(0,nn):
+            if B[instance,node] != 0:
+                f = open('.balance/alloc-%d-%d' % (instance,node), 'w')
+                print >>f, opt_allocs[(instance,node)]
+                f.close()
+
+    
+    
+
 def printout(ni,nn,ranks,allocs,L):
     print '           ' + ' ' * 5 * nn + 'NUM CORES ' + ' ' * 5 * nn + 'Total_cores   Load   Load/Total_cores'
     print '           ' + ' ' * 5 * nn + '   node   ' + ' ' * 5 * nn + '    '
@@ -181,4 +193,7 @@ printout(ni,nn,ranks,allocs,L)
 opt_allocs = optimize(ni, nn, L, B, C)
 print 'Optimized allocation'
 printout(ni,nn,ranks,opt_allocs,L)
+
+write_new_alloc(ni, nn, B, opt_allocs)
+
 
