@@ -76,7 +76,7 @@ def printout(ni,nn,ranks,allocs,L):
             total_c += allocs.get((instance,node),0)
         print '%10.2f' % total_c,
         print '%10.2f' % load,
-        print '%10.2f' % (load/total_c)
+        print '%10.3f' % (load/total_c)
 
 
     used = []
@@ -88,7 +88,7 @@ def printout(ni,nn,ranks,allocs,L):
     print '           ' + ('%10s' % '---') * nn
     print '           ' + ('%10.2f' * nn) % tuple(used)
 
-def optimize(ni, nn, L, B, C):
+def optimize(ni, nn, ranks, L, B, C):
     # Minimise      -t                                        (i.e. maximise worst-case cores per load)
     #
     #                   N
@@ -99,8 +99,10 @@ def optimize(ni, nn, L, B, C):
     #               - Sum  a     +  L  t   <= 0     all j       (Sum cores >= load * t)     [2]
     #                 i=1   ij       j
     #
-    #                      a               >= 0     all i,j                                 [3]
+    #                      a               >= 0     all i,j                                 [3a]
     #                       ij
+    #
+    #                      a               >= 1     when j is the master node (as main cannot be migrated) [3b]
 
     # Variables are t, a_ij  (but only when B_ij = 1; otherwise will get bogus values for the other a_ij)
 
@@ -137,11 +139,14 @@ def optimize(ni, nn, L, B, C):
         Ai.append(row)         # LHS of [2]
         bi.append(0.0)         # RHS of [2]
     # Constraints [3]
-    for k in range(0,num_aij):
+    for k,(instance,node) in enumerate(entries):
         row = [0.0] * num_variables
         row[k+1] = -1.0
         Ai.append(row)        # LHS of [3]
-        bi.append(0)          # RHS of [3]
+        if ranks[(instance,node)] == 0:
+            bi.append(-1.0)          # RHS of [3b]
+        else:
+            bi.append(0.0)           # RHS of [3a]
 
     A = matrix(Ai).trans()
     # print 'A', A.size
@@ -231,7 +236,7 @@ if max(L) == 0.0:
     opt_allocs = allocs
     print 'No work!'
 else:
-    opt_allocs = optimize(ni, nn, L, B, C)
+    opt_allocs = optimize(ni, nn, ranks, L, B, C)
 
 
 print 'Optimized allocation'
