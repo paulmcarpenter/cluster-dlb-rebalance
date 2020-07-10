@@ -51,7 +51,7 @@ class NanosInstance
                     sprintf(filename, ".balance/load-%d-%d", _instanceNum, _nodes[rank]);
                     std::ofstream myfile;
                     myfile.open(filename);
-                    myfile << rank << " " << _cores[rank] << " " << nodeLoad;
+                    myfile << rank << " " << _cores[rank] << " " << nodeLoad << "\n";
                     myfile.close();
                 }
 
@@ -140,20 +140,25 @@ NanosInstance::NanosInstance(int instanceNum, int totalLoad, int numRanks, ...)
 
 int main(void)
 {
-    std::cout << "hello world\n";
+    system("rm -rf .balance/");
+    system("mkdir -p .balance/");
 
-    struct stat bal;
-    if (stat(".balance/", &bal) == -1)
+    // Map mpi rank to node number
+    std::vector<int>map {0,1,2,3, 0,1,2,3};
+    std::ofstream myfile;
+    myfile.open(".map");
+    for (int node: map)
     {
-        mkdir(".balance/", 0700);
+        myfile << node << " ";
     }
+    myfile << "\n";
+    myfile.close();
 
-
-    //                 instanceNum  totalLoad, numRanks   nodes
-    NanosInstance ins0(          0,        10,       2,  0,1);
-    NanosInstance ins1(          1,        20,       2,  1,2);
-    NanosInstance ins2(          2,         5,       2,  2,3);
-    NanosInstance ins3(          3,        10,       2,  3,0);
+    //                 instanceNum  totalLoad, numRanks   mpi ranks
+    NanosInstance ins0(          0,        10,       2,  0,5);
+    NanosInstance ins1(          1,        20,       2,  1,6);
+    NanosInstance ins2(          2,         5,       2,  2,7);
+    NanosInstance ins3(          3,        10,       2,  3,4);
 #if 0
     ins0.wait();
     ins1.wait();

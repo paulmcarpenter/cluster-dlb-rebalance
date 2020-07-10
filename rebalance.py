@@ -25,6 +25,13 @@ def zeros(rows,cols):
 
 
 def read_current_alloc():
+    f = open('.map', 'r')
+    line = f.readline()
+    nn = line.strip().split(' ')
+    print nn
+    ranktonode = [int(n) for n in nn]
+    print ranktonode
+
     fnames = listdir('.balance')
     max_instance = 0
     max_node = 0
@@ -35,23 +42,25 @@ def read_current_alloc():
         m = re.match(r'load-([0-9*])-([0-9]*)', fname)
         if m:
             instance = int(m.group(1))
-            node = int(m.group(2))
+            rank = int(m.group(2))
+            node = ranktonode[rank]
             max_instance = max(instance, max_instance)
             max_node = max(node, max_node)
             f = open('.balance/' + fname)
             l = f.readline().strip().split(' ')
-            ranks[ (instance,node) ] = int(l[0])
+            ranks[ (instance,int(l[0])) ] = node
             allocs[ (instance,node) ] = float(l[1])
             loads[ (instance,node) ] = float(l[2])
             f.close()
         
     return max_instance+1, max_node+1, ranks, allocs, loads
     
-def write_new_alloc(ni, nn, B, opt_allocs):
+def write_new_alloc(ni, nn, ranks, B, opt_allocs):
     for instance in range(0,ni):
         f = open('.balance/alloc-%d' % instance, 'w')
-        for node in range(0,nn):
-            if B[instance,node] != 0:
+        for rank in range(0,nn):
+            if (instance,rank) in ranks.keys():
+                node = ranks[(instance,rank)]
                 print >>f, opt_allocs[(instance,node)]
         f.close()
 
@@ -143,7 +152,7 @@ def optimize(ni, nn, ranks, L, B, C):
         row = [0.0] * num_variables
         row[k+1] = -1.0
         Ai.append(row)        # LHS of [3]
-        if ranks[(instance,node)] == 0:
+        if ranks[(instance,0)] == node:
             bi.append(-1.0)          # RHS of [3b]
         else:
             bi.append(0.0)           # RHS of [3a]
@@ -193,6 +202,12 @@ def make_integer(ni, nn, allocs, L, B, C):
 
         for j,instance in enumerate(indices):
             int_allocs[(instance,node)] = ncores_int[j]
+
+    # Lost the zeros: put them back
+    for instance in range(0,ni):
+        for node in range(0,nn):
+            if B[(instance,node)]>0:
+                int_allocs[(instance,node)] = int_allocs.get((instance,node),0.0)
     return int_allocs
 
 
@@ -246,6 +261,6 @@ integer_allocs = make_integer(ni, nn, opt_allocs, L, B, C)
 print 'Integer allocation'
 printout(ni,nn,ranks,integer_allocs,L)
 
-write_new_alloc(ni, nn, B, integer_allocs)
+write_new_alloc(ni, nn, ranks, B, integer_allocs)
 
 
