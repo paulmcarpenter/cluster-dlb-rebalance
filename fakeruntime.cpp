@@ -56,13 +56,13 @@ class NanosInstance
                 }
 
                 // Get the allocation of cores
-                for (int rank=0; rank<_numRanks; rank++)
+                char filename[1024];
+                sprintf(filename, ".balance/alloc-%d", _instanceNum);
+                std::ifstream myfile;
+                myfile.open(filename);
+                if (myfile.is_open())
                 {
-                    char filename[1024];
-                    sprintf(filename, ".balance/alloc-%d-%d", _instanceNum, _nodes[rank]);
-                    std::ifstream myfile;
-                    myfile.open(filename);
-                    if (myfile.is_open())
+                    for (int rank=0; rank<_numRanks; rank++)
                     {
                         int nodeAlloc;
                         myfile >> nodeAlloc;
@@ -74,7 +74,6 @@ class NanosInstance
                     }
                     myfile.close();
                 }
-
 
                 sleep(1);
             }

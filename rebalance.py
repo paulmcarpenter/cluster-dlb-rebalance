@@ -49,11 +49,11 @@ def read_current_alloc():
     
 def write_new_alloc(ni, nn, B, opt_allocs):
     for instance in range(0,ni):
+        f = open('.balance/alloc-%d' % instance, 'w')
         for node in range(0,nn):
             if B[instance,node] != 0:
-                f = open('.balance/alloc-%d-%d' % (instance,node), 'w')
                 print >>f, opt_allocs[(instance,node)]
-                f.close()
+        f.close()
 
     
     
