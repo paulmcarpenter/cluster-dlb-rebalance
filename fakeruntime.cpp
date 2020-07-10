@@ -111,20 +111,19 @@ NanosInstance::NanosInstance(int instanceNum, int totalLoad, int numRanks, ...)
     gethostname(hostname, 1024);
 
     va_start(args, numRanks);
+
+    // Reset allocation for the instance
+    char filename[1024];
+    sprintf(filename, ".balance/alloc-%d", _instanceNum);
+    std::ofstream myfile;
+    myfile.open(filename);
     for (int i=0; i<numRanks; i++)
     {
         _nodes[i] = va_arg(args, int);
-
-        // Reset allocation for the rank
-        char filename[1024];
-        sprintf(filename, ".balance/alloc-%d-%d", _instanceNum, _nodes[i]);
-        std::ofstream myfile;
-        myfile.open(filename);
         myfile << ((i==0)?48:0) << "\n";
-        myfile.close();
-
         _cores[i] = 0;
     }
+    myfile.close();
     _cores[0] = TOTAL_CORES_PER_NODE;
     va_end(args);
 
