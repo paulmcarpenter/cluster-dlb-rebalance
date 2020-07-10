@@ -40,7 +40,6 @@ def read_current_alloc():
             max_node = max(node, max_node)
             f = open('.balance/' + fname)
             l = f.readline().strip().split(' ')
-            print l
             ranks[ (instance,node) ] = int(l[0])
             allocs[ (instance,node) ] = float(l[1])
             loads[ (instance,node) ] = float(l[2])
@@ -67,11 +66,14 @@ def printout(ni,nn,ranks,allocs,L):
     for instance in range(0, ni):
         print 'Instance %2d' % instance,
         for node in range(0, nn):
-            print '%10.2f' % allocs[(instance,node)],
+            if (instance,node) in allocs:
+                print '%10.2f' % allocs[(instance,node)],
+            else:
+                print '%10s' % '-',
         load = L[instance,0]
         total_c = 0
         for node in range(0, nn):
-            total_c += allocs[(instance,node)]
+            total_c += allocs.get((instance,node),0)
         print '%10.2f' % total_c,
         print '%10.2f' % load,
         print '%10.2f' % (load/total_c)
@@ -81,7 +83,7 @@ def printout(ni,nn,ranks,allocs,L):
     for node in range(0,nn):
         u = 0
         for instance in range(0,ni):
-            u += allocs[(instance,node)]
+            u += allocs.get((instance,node),0)
         used.append(u)
     print '           ' + ('%10s' % '---') * nn
     print '           ' + ('%10.2f' * nn) % tuple(used)
@@ -89,62 +91,70 @@ def printout(ni,nn,ranks,allocs,L):
 def optimize(ni, nn, L, B, C):
     # Minimise      -t                                        (i.e. maximise worst-case cores per load)
     #
-    #                 N
-    # subject to    Sum  a               <= C     all i       (available cores)
-    #               j=1   ij                 i
+    #                   N
+    # subject to      Sum  a               <= C     all i       (available cores)           [1]
+    #                 j=1   ij                 i
     #
     #                   N
-    #               - Sum  a     +  L  t   <= 0     all j       (Sum cores >= load * t)
+    #               - Sum  a     +  L  t   <= 0     all j       (Sum cores >= load * t)     [2]
     #                 i=1   ij       j
+    #
+    #                      a               >= 0     all i,j                                 [3]
+    #                       ij
 
-    # Variables are t, node0instance0, node0instance1, ... , node1instance0, ...
+    # Variables are t, a_ij  (but only when B_ij = 1; otherwise will get bogus values for the other a_ij)
+
+    #  For which (instance,node) do we need an a_ij
+    entries = [(instance,node) for instance in range(0,ni) for node in range(0,nn) if B[instance,node] != 0]
+    num_aij = len(entries)
+    num_variables = 1 + num_aij   # including t
 
     # Objective function to minimise: t
-    c = matrix( [[-1.0]] + [[0.0]] * ni * nn).trans()
+    c = matrix( [[-1.0]] + [[0.0]] * num_aij).trans()
 
     # LHS of constraints: one per node and one per instance
-    Ali = []
+    Ai = []
+    bi = []
+    # Constraints [1]
     for node in range(0,nn):
-        # Sum up the instances on this node
-        row = [0] * ni * node + [1] * ni + [0] * ni * (nn-node-1)
-        Ali.append(row)
-    Aln = []
+        row = [0.0] #  coefficient of t is zero in [3]
+        for (instance,n) in entries:
+            if n == node:
+                row.append(1.0)   # This variable has coefficient 1 in [1]
+            else:
+                row.append(0)   # This variable has coefficient 0 in [1]
+        Ai.append(row)          # LHS of [1]
+        bi.append(C[node])      # RHS of [1]
+    # Constraints [2]
     for instance in range(0,ni):
-        # Sum up the nodes on this instance
-        row = [0.0] * nn * ni
-        for node in range(0,nn):
-            if B[instance,node] != 0:
-                row[ node*ni + instance] = -1.0
-        Aln.append(row)
-    Alp = []
-    for node in range(0,nn):
-        for instance in range(0,ni):
-            row = [0.0] * nn * ni
-            row[node*ni + instance] = -1.0
-            Alp.append(row)
+        # Sum up the nodes in this instance
+        row = [L[instance]]   # Coefficient of t is Lj (j=instance)
+        for (i,node) in entries:
+            if i == instance:                 # Variable affects this instance
+                row.append(-1.0)
+            else:
+                row.append(0.0)
+        Ai.append(row)         # LHS of [2]
+        bi.append(0.0)         # RHS of [2]
+    # Constraints [3]
+    for k in range(0,num_aij):
+        row = [0.0] * num_variables
+        row[k+1] = -1.0
+        Ai.append(row)        # LHS of [3]
+        bi.append(0)          # RHS of [3]
 
-    A = myblock( [ [zeros(nn,1),    matrix(Ali).trans()],
-                   [L,              matrix(Aln).trans()],
-                   [zeros(nn*ni,1), matrix(Alp).trans()]])
+    A = matrix(Ai).trans()
     # print 'A', A.size
     # print(A)
-
-    # RHS of constraints
-    b = 1.0 * myblock( [ [C],
-                       [zeros(ni,1)],
-                       [zeros(nn*ni,1)]] )
+    b = matrix(bi)
     # print 'b', b.size
-    # print (b)
-    # print 'c', c.size
-    # print(c)
+    # print(b)
 
     sol = solvers.lp( c, A, b)
 
     opt_allocs = {}
-
-    for instance in range(0, ni):
-        for node in range(0, nn):
-            opt_allocs[(instance,node)] = sol['x'][1 + node*ni + instance]
+    for k,(instance,node) in enumerate(entries):
+            opt_allocs[(instance,node)] = sol['x'][1 + k]
     return opt_allocs
 
 
@@ -176,8 +186,6 @@ def make_integer(ni, nn, allocs, L, B, C):
                 frac,j = frac_lost_and_j[c % len(frac_lost_and_j)]
                 ncores_int[j] = ncores_int[j] + 1
 
-        for instance in range(0,ni):
-            int_allocs[(instance,node)] = 0
         for j,instance in enumerate(indices):
             int_allocs[(instance,node)] = ncores_int[j]
     return int_allocs
@@ -203,8 +211,6 @@ for instance in range(0,ni):
             load += 1.0 * loads[(instance,node)]
             Brow.append(1.0)
         else:
-            loads[(instance,node)] = 0.0
-            allocs[(instance,node)] = 0.0
             Brow.append(0.0)
     Ll.append(load)
     Brows.append(Brow)
