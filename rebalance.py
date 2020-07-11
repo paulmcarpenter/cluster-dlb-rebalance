@@ -2,6 +2,7 @@
 import sys
 import cvxopt
 import re
+import time
 from cvxopt import matrix, solvers
 
 from os import listdir
@@ -216,54 +217,66 @@ def make_integer(ni, nn, allocs, L, B, C):
 
 
 
+def run_optimize():
+
+    ni, nn, ranks, allocs, loads = read_current_alloc()
+
+    # print 'ni =', ni
+    # print 'nn =', nn
+    # print 'allocs =', allocs
+    # print 'loads =', loads
+    Ll = []
+    Brows = []
+    for instance in range(0,ni):
+        load = 0
+        Brow = []
+        for node in range(0,nn):
+            if (instance,node) in loads:
+                load += 1.0 * loads[(instance,node)]
+                Brow.append(1.0)
+            else:
+                Brow.append(0.0)
+        Ll.append(load)
+        Brows.append(Brow)
+
+    # Load vector
+    L = matrix(Ll)
+
+    # Topology matrix
+    B = matrix(Brows).trans()
+
+    # Available cores vector
+    C = matrix( [[48]] * nn).trans()
+    print 'Current allocation'
+    printout(ni,nn,ranks,allocs,L)
+
+    if max(L) == 0.0:
+        # Currently no work!!!
+        opt_allocs = allocs
+        print 'No work!'
+    else:
+        opt_allocs = optimize(ni, nn, ranks, L, B, C)
 
 
-ni, nn, ranks, allocs, loads = read_current_alloc()
+    print 'Optimized allocation'
+    printout(ni,nn,ranks,opt_allocs,L)
 
-# print 'ni =', ni
-# print 'nn =', nn
-# print 'allocs =', allocs
-# print 'loads =', loads
-Ll = []
-Brows = []
-for instance in range(0,ni):
-    load = 0
-    Brow = []
-    for node in range(0,nn):
-        if (instance,node) in loads:
-            load += 1.0 * loads[(instance,node)]
-            Brow.append(1.0)
-        else:
-            Brow.append(0.0)
-    Ll.append(load)
-    Brows.append(Brow)
+    integer_allocs = make_integer(ni, nn, opt_allocs, L, B, C)
+    print 'Integer allocation'
+    printout(ni,nn,ranks,integer_allocs,L)
 
-# Load vector
-L = matrix(Ll)
+    write_new_alloc(ni, nn, ranks, B, integer_allocs)
 
-# Topology matrix
-B = matrix(Brows).trans()
-
-# Available cores vector
-C = matrix( [[48]] * nn).trans()
-print 'Current allocation'
-printout(ni,nn,ranks,allocs,L)
-
-if max(L) == 0.0:
-    # Currently no work!!!
-    opt_allocs = allocs
-    print 'No work!'
-else:
-    opt_allocs = optimize(ni, nn, ranks, L, B, C)
+def main(argv):
+    niter = 1
+    if len(argv) == 2:
+        niter = int(argv[1])
+    print 'Number of iterations', niter
+    for it in range(0,niter):
+        if it > 0:
+            time.sleep(2)
+        run_optimize()
 
 
-print 'Optimized allocation'
-printout(ni,nn,ranks,opt_allocs,L)
-
-integer_allocs = make_integer(ni, nn, opt_allocs, L, B, C)
-print 'Integer allocation'
-printout(ni,nn,ranks,integer_allocs,L)
-
-write_new_alloc(ni, nn, ranks, B, integer_allocs)
-
-
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))
