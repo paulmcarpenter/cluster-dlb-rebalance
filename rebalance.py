@@ -214,7 +214,7 @@ def make_integer(ni, nn, allocs, L, B, C):
     for group in range(0,ni):
         for node in range(0,nn):
             if B[(group,node)]>0:
-                int_allocs[(group,node)] = int_allocs.get((group,node),0.0)
+                int_allocs[(group,node)] = int_allocs.get((group,node),0)
     return int_allocs
 
 
