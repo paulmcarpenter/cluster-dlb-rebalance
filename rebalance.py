@@ -86,7 +86,10 @@ def printout(ni,nn,ranks,allocs,L):
             total_c += allocs.get((instance,node),0)
         print '%10.2f' % total_c,
         print '%10.2f' % load,
-        print '%10.3f' % (load/total_c)
+        if total_c > 0:
+            print '%10.3f' % (load/total_c)
+        else:
+            print '%10s' % 'inf'
 
 
     used = []
