@@ -34,7 +34,7 @@ def read_current_alloc():
     print ranktonode
 
     fnames = listdir('.balance')
-    max_instance = 0
+    max_group = 0
     max_node = 0
     ranks = {}
     allocs = {}
@@ -42,27 +42,27 @@ def read_current_alloc():
     for fname in fnames:
         m = re.match(r'load-([0-9*])-([0-9]*)', fname)
         if m:
-            instance = int(m.group(1))
+            group = int(m.group(1))
             rank = int(m.group(2))
             node = ranktonode[rank]
-            max_instance = max(instance, max_instance)
+            max_group = max(group, max_group)
             max_node = max(node, max_node)
             f = open('.balance/' + fname)
             l = f.readline().strip().split(' ')
-            ranks[ (instance,int(l[0])) ] = node
-            allocs[ (instance,node) ] = float(l[1])
-            loads[ (instance,node) ] = float(l[2])
+            ranks[ (group,int(l[0])) ] = node
+            allocs[ (group,node) ] = float(l[1])
+            loads[ (group,node) ] = float(l[2])
             f.close()
         
-    return max_instance+1, max_node+1, ranks, allocs, loads
+    return max_group+1, max_node+1, ranks, allocs, loads
     
 def write_new_alloc(ni, nn, ranks, B, opt_allocs):
-    for instance in range(0,ni):
-        f = open('.balance/alloc-%d' % instance, 'w')
+    for group in range(0,ni):
+        f = open('.balance/alloc-%d' % group, 'w')
         for rank in range(0,nn):
-            if (instance,rank) in ranks.keys():
-                node = ranks[(instance,rank)]
-                print >>f, opt_allocs[(instance,node)]
+            if (group,rank) in ranks.keys():
+                node = ranks[(group,rank)]
+                print >>f, opt_allocs[(group,node)]
         f.close()
 
     
@@ -73,17 +73,17 @@ def printout(ni,nn,ranks,allocs,L):
     print '           ' + ' ' * 5 * nn + '   node   ' + ' ' * 5 * nn + '    '
     print '           ' + ('%10d' * nn) % tuple(range(0,nn))
 
-    for instance in range(0, ni):
-        print 'Instance %2d' % instance,
+    for group in range(0, ni):
+        print 'Instance %2d' % group,
         for node in range(0, nn):
-            if (instance,node) in allocs:
-                print '%10.2f' % allocs[(instance,node)],
+            if (group,node) in allocs:
+                print '%10.2f' % allocs[(group,node)],
             else:
                 print '%10s' % '-',
-        load = L[instance,0]
+        load = L[group,0]
         total_c = 0
         for node in range(0, nn):
-            total_c += allocs.get((instance,node),0)
+            total_c += allocs.get((group,node),0)
         print '%10.2f' % total_c,
         print '%10.2f' % load,
         if total_c > 0:
@@ -95,8 +95,8 @@ def printout(ni,nn,ranks,allocs,L):
     used = []
     for node in range(0,nn):
         u = 0
-        for instance in range(0,ni):
-            u += allocs.get((instance,node),0)
+        for group in range(0,ni):
+            u += allocs.get((group,node),0)
         used.append(u)
     print '           ' + ('%10s' % '---') * nn
     print '           ' + ('%10.2f' * nn) % tuple(used)
@@ -119,23 +119,23 @@ def optimize(ni, nn, ranks, L, B, C):
 
     # Variables are t, a_ij  (but only when B_ij = 1; otherwise will get bogus values for the other a_ij)
 
-    #  For which (instance,node) do we need an a_ij
-    entries = [(instance,node) for instance in range(0,ni) for node in range(0,nn) if B[instance,node] != 0]
+    #  For which (group,node) do we need an a_ij
+    entries = [(group,node) for group in range(0,ni) for node in range(0,nn) if B[group,node] != 0]
     num_aij = len(entries)
     num_variables = 1 + num_aij   # including t
 
     # Objective function to minimise: t
     c = matrix( [[-1.0]] + [[0.0]] * num_aij).trans()
 
-    # LHS of constraints: one per node and one per instance
+    # LHS of constraints: one per node and one per group
     Ai = []
     bi = []
     # Constraints [1]
     for node in range(0,nn):
         row = [0.0] #  coefficient of t is zero in [3]
-        for (instance,n) in entries:
+        for (group,n) in entries:
             if n == node:
-                if ranks[(instance,0)] == node:
+                if ranks[(group,0)] == node:
                     row.append(1.0)   # This variable has coefficient 1 in [1]
                 else:
                     row.append(1.01)   # This variable has coefficient 1 in [1]
@@ -144,22 +144,22 @@ def optimize(ni, nn, ranks, L, B, C):
         Ai.append(row)          # LHS of [1]
         bi.append(C[node])      # RHS of [1]
     # Constraints [2]
-    for instance in range(0,ni):
-        # Sum up the nodes in this instance
-        row = [L[instance]]   # Coefficient of t is Lj (j=instance)
+    for group in range(0,ni):
+        # Sum up the nodes in this group
+        row = [L[group]]   # Coefficient of t is Lj (j=group)
         for (i,node) in entries:
-            if i == instance:                 # Variable affects this instance
+            if i == group:                 # Variable affects this group
                 row.append(-1.0)
             else:
                 row.append(0.0)
         Ai.append(row)         # LHS of [2]
         bi.append(0.0)         # RHS of [2]
     # Constraints [3]
-    for k,(instance,node) in enumerate(entries):
+    for k,(group,node) in enumerate(entries):
         row = [0.0] * num_variables
         row[k+1] = -1.0
         Ai.append(row)        # LHS of [3]
-        if ranks[(instance,0)] == node:
+        if ranks[(group,0)] == node:
             bi.append(-1.0)          # RHS of [3b]
         else:
             bi.append(0.0)           # RHS of [3a]
@@ -174,24 +174,24 @@ def optimize(ni, nn, ranks, L, B, C):
     sol = solvers.lp( c, A, b)
 
     opt_allocs = {}
-    for k,(instance,node) in enumerate(entries):
-            opt_allocs[(instance,node)] = sol['x'][1 + k]
+    for k,(group,node) in enumerate(entries):
+            opt_allocs[(group,node)] = sol['x'][1 + k]
     return opt_allocs
 
 
 def make_integer(ni, nn, allocs, L, B, C):
     int_allocs = {}
     for node in range(0,nn):
-        indices = [instance for instance in range(0,ni) if B[(instance,node)]>0 and allocs[(instance,node)] > 0 ]
+        indices = [group for group in range(0,ni) if B[(group,node)]>0 and allocs[(group,node)] > 0 ]
 
         if len(indices) > 0:
-            ncores      = [allocs[(instance,node)] for instance in indices]
-            ncores_int  = [int(allocs[(instance,node)]) for instance in indices]
-            total_cores = [sum([allocs[(instance,n)] for n in range(0,nn) if B[(instance,n)]>0]) for instance in indices]
+            ncores      = [allocs[(group,node)] for group in indices]
+            ncores_int  = [int(allocs[(group,node)]) for group in indices]
+            total_cores = [sum([allocs[(group,n)] for n in range(0,nn) if B[(group,n)]>0]) for group in indices]
             # load_per_cores = [L[indices[j]] / total_cores[j] for j in range(0,len(total_cores))]
             # print 'node', node, 'indices', indices, 'cores', ncores, 'total_cores', total_cores, 'lpc', load_per_cores
 
-            # After rebalancing, all instances should have the same load-per-core
+            # After rebalancing, all groups should have the same load-per-core
             # Hence the slowdown is proportional to the fraction lost: (ncores - int(ncores)) / total_cores
             frac_lost_and_j = [(1.0 * (ncores[j] - int(ncores[j])) / total_cores[j],j) for j in range(0,len(total_cores))]
             # print 'node', node, 'indices', indices, 'cores', ncores, 'total_cores', total_cores, 'frac_lost', frac_lost_and_j
@@ -199,7 +199,7 @@ def make_integer(ni, nn, allocs, L, B, C):
             frac_lost_and_j.sort()
             frac_lost_and_j.reverse()
 
-            extra_cores = C[instance] - sum(ncores_int)
+            extra_cores = C[group] - sum(ncores_int)
             # print 'extra_cores', extra_cores
             for c in range(0,extra_cores):
                 # Sometimes it is not necessary to use all cores: in this case we just keep going
@@ -207,14 +207,14 @@ def make_integer(ni, nn, allocs, L, B, C):
                 frac,j = frac_lost_and_j[c % len(frac_lost_and_j)]
                 ncores_int[j] = ncores_int[j] + 1
 
-        for j,instance in enumerate(indices):
-            int_allocs[(instance,node)] = ncores_int[j]
+        for j,group in enumerate(indices):
+            int_allocs[(group,node)] = ncores_int[j]
 
     # Lost the zeros: put them back
-    for instance in range(0,ni):
+    for group in range(0,ni):
         for node in range(0,nn):
-            if B[(instance,node)]>0:
-                int_allocs[(instance,node)] = int_allocs.get((instance,node),0.0)
+            if B[(group,node)]>0:
+                int_allocs[(group,node)] = int_allocs.get((group,node),0.0)
     return int_allocs
 
 
@@ -230,12 +230,12 @@ def run_optimize():
     # print 'loads =', loads
     Ll = []
     Brows = []
-    for instance in range(0,ni):
+    for group in range(0,ni):
         load = 0
         Brow = []
         for node in range(0,nn):
-            if (instance,node) in loads:
-                load += 1.0 * loads[(instance,node)]
+            if (group,node) in loads:
+                load += 1.0 * loads[(group,node)]
                 Brow.append(1.0)
             else:
                 Brow.append(0.0)
