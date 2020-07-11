@@ -131,7 +131,10 @@ def optimize(ni, nn, ranks, L, B, C):
         row = [0.0] #  coefficient of t is zero in [3]
         for (instance,n) in entries:
             if n == node:
-                row.append(1.0)   # This variable has coefficient 1 in [1]
+                if ranks[(instance,0)] == node:
+                    row.append(1.0)   # This variable has coefficient 1 in [1]
+                else:
+                    row.append(1.01)   # This variable has coefficient 1 in [1]
             else:
                 row.append(0)   # This variable has coefficient 0 in [1]
         Ai.append(row)          # LHS of [1]
