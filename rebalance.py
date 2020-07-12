@@ -3,6 +3,7 @@ import sys
 import cvxopt
 import re
 import time
+import getopt
 from cvxopt import matrix, solvers
 
 from os import listdir
@@ -101,7 +102,7 @@ def printout(ni,nn,ranks,allocs,L):
     print '           ' + ('%10s' % '---') * nn
     print '           ' + ('%10.2f' * nn) % tuple(used)
 
-def optimize(ni, nn, ranks, L, B, C):
+def optimize(ni, nn, ranks, L, B, C, policy):
     # Minimise      -t                                        (i.e. maximise worst-case cores per load)
     #
     #                   N
@@ -120,7 +121,32 @@ def optimize(ni, nn, ranks, L, B, C):
     # Variables are t, a_ij  (but only when B_ij = 1; otherwise will get bogus values for the other a_ij)
 
     #  For which (group,node) do we need an a_ij
-    entries = [(group,node) for group in range(0,ni) for node in range(0,nn) if B[group,node] != 0]
+
+    # This depends on the policy
+    if policy == 'optimized':
+        # Optimized: have all a_ij
+        entries = [(group,node) for group in range(0,ni)  
+                                    for node in range(0,nn) 
+                                        if B[group,node] != 0]
+    elif policy == 'master':
+        # Only have masters
+        entries = [(group,node) for group in range(0,ni) 
+                                    for node in range(0,nn) 
+                                        if ranks[(group,0)] == node ]
+    elif policy == 'slaves':
+        # Only have slaves 
+        entries = [(group,node) for group in range(0,ni)  
+                                    for node in range(0,nn) 
+                                        if B[group,node] != 0 and ranks[(group,0)] != node ]
+
+    elif policy == 'slave1':
+        # Only have slave 1
+        entries = [(group,node) for group in range(0,ni)  
+                                    for node in range(0,nn) 
+                                        if ranks[(group,1)] == node ]
+    else:
+        assert False
+
     num_aij = len(entries)
     num_variables = 1 + num_aij   # including t
 
@@ -176,6 +202,14 @@ def optimize(ni, nn, ranks, L, B, C):
     opt_allocs = {}
     for k,(group,node) in enumerate(entries):
             opt_allocs[(group,node)] = sol['x'][1 + k]
+
+    for group in range(0,ni):
+        for node in range(0,nn):
+            if B[group,node] != 0:
+                if not (group,node) in opt_allocs:
+                    assert policy != 'optimized' # only happens when possibilities set to zero
+                    opt_allocs[(group,node)] = 0.0
+
     return opt_allocs
 
 
@@ -220,7 +254,7 @@ def make_integer(ni, nn, allocs, L, B, C):
 
 
 
-def run_optimize():
+def run_policy(equal, policy):
 
     ni, nn, ranks, allocs, loads = read_current_alloc()
 
@@ -242,6 +276,11 @@ def run_optimize():
         Ll.append(load)
         Brows.append(Brow)
 
+    # Modify problem depending on the policy
+    if equal:
+        # Ignore real loads, set all to 1.0
+        Ll = [1.0] * ni
+
     # Load vector
     L = matrix(Ll)
 
@@ -258,9 +297,7 @@ def run_optimize():
         opt_allocs = allocs
         print 'No work!'
     else:
-        opt_allocs = optimize(ni, nn, ranks, L, B, C)
-
-
+        opt_allocs = optimize(ni, nn, ranks, L, B, C, policy)
     print 'Optimized allocation'
     printout(ni,nn,ranks,opt_allocs,L)
 
@@ -270,15 +307,41 @@ def run_optimize():
 
     write_new_alloc(ni, nn, ranks, B, integer_allocs)
 
+def Usage(argv):
+    print argv[0], '   opts <number-of-iterations>'
+    print '   --help         Show this help'
+    print '   --equal        Assume equal loads, not indicated loads'
+    print '   --master       All work on the master'
+    print '   --slaves       No work on the master'
+    print '   --slave1       Work only on the first slave'
+
 def main(argv):
+
+    equal = False
+    policy = 'optimized'
+    try:
+        opts, args = getopt.getopt( argv[1:], "h", ["help", "equal", "master", "slaves", "slave1"])
+    except getopt.error, msg:
+        print msg
+        print "for help use --help"
+        return 2
+    for o,a in opts:
+        if o in ('-h', '--help'):
+            return Usage(argv)
+        elif o == '--equal':
+            equal = True
+        elif o in ('--master', '--slaves', '--slave1'):
+            policy = o[2:]
+            print 'policy', policy
+
     niter = 1
-    if len(argv) == 2:
-        niter = int(argv[1])
+    if len(args) == 1:
+        niter = int(args[0])
     print 'Number of iterations', niter
     for it in range(0,niter):
         if it > 0:
             time.sleep(2)
-        run_optimize()
+        run_policy(equal, policy)
 
 
 if __name__ == '__main__':
