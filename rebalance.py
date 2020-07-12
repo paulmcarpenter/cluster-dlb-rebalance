@@ -164,7 +164,7 @@ def optimize(ni, nn, ranks, L, B, C, policy):
                 if ranks[(group,0)] == node:
                     row.append(1.0)   # This variable has coefficient 1 in [1]
                 else:
-                    row.append(1.01)   # This variable has coefficient 1 in [1]
+                    row.append(1.00001)   # This variable has coefficient 1 in [1]
             else:
                 row.append(0)   # This variable has coefficient 0 in [1]
         Ai.append(row)          # LHS of [1]
@@ -280,6 +280,7 @@ def run_policy(equal, policy):
     if equal:
         # Ignore real loads, set all to 1.0
         Ll = [1.0] * ni
+
 
     # Load vector
     L = matrix(Ll)
