@@ -252,7 +252,7 @@ def make_integer(ni, nn, allocs, L, B, C):
 
 
 
-def run_policy(equal, policy):
+def run_policy(equal, policy, cmdloads):
 
     ni, nn, ranks, allocs, loads = read_current_alloc()
 
@@ -273,6 +273,9 @@ def run_policy(equal, policy):
                 Brow.append(0.0)
         Ll.append(load)
         Brows.append(Brow)
+
+    if not cmdloads is None:
+        Ll = [float(x) for x in cmdloads.split(',')]
 
     # Modify problem depending on the policy
     if equal:
@@ -313,13 +316,15 @@ def Usage(argv):
     print '   --master       All work on the master'
     print '   --slaves       No work on the master'
     print '   --slave1       Work only on the first slave'
+    print '   --loads l      Specify the loads (comma-separated)'
 
 def main(argv):
 
     equal = False
     policy = 'optimized'
+    loads = None
     try:
-        opts, args = getopt.getopt( argv[1:], "h", ["help", "equal", "master", "slaves", "slave1"])
+        opts, args = getopt.getopt( argv[1:], "h", ["help", "equal", "master", "slaves", "slave1", "loads="])
     except getopt.error, msg:
         print msg
         print "for help use --help"
@@ -332,6 +337,8 @@ def main(argv):
         elif o in ('--master', '--slaves', '--slave1'):
             policy = o[2:]
             print 'policy', policy
+        elif o == '--loads':
+            loads = a
 
     niter = 1
     if len(args) == 1:
@@ -340,7 +347,7 @@ def main(argv):
     for it in range(0,niter):
         if it > 0:
             time.sleep(2)
-        run_policy(equal, policy)
+        run_policy(equal, policy, loads)
 
 
 if __name__ == '__main__':
