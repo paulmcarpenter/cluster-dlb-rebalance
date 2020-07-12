@@ -30,9 +30,7 @@ def read_current_alloc():
     f = open('.map', 'r')
     line = f.readline()
     nn = line.strip().split(' ')
-    print nn
     ranktonode = [int(n) for n in nn]
-    print ranktonode
 
     fnames = listdir('.balance')
     max_group = 0
@@ -338,7 +336,7 @@ def main(argv):
     niter = 1
     if len(args) == 1:
         niter = int(args[0])
-    print 'Number of iterations', niter
+    # print 'Number of iterations', niter
     for it in range(0,niter):
         if it > 0:
             time.sleep(2)
