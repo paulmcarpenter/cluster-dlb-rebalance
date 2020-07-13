@@ -67,7 +67,7 @@ def write_new_alloc(ni, nn, ranks, B, opt_allocs):
     
     
 
-def printout(ni,nn,ranks,allocs,L):
+def printout(ni,nn,ranks,allocs,loads):
     print '           ' + ' ' * 5 * nn + 'NUM CORES ' + ' ' * 5 * nn + 'Total_cores   Load   Load/Total_cores'
     print '           ' + ' ' * 5 * nn + '   node   ' + ' ' * 5 * nn + '    '
     print '           ' + ('%10d' * nn) % tuple(range(0,nn))
@@ -79,7 +79,7 @@ def printout(ni,nn,ranks,allocs,L):
                 print '%10.2f' % allocs[(group,node)],
             else:
                 print '%10s' % '-',
-        load = L[group,0]
+        load = loads[group]
         total_c = 0
         for node in range(0, nn):
             total_c += allocs.get((group,node),0)
@@ -250,49 +250,35 @@ def make_integer(ni, nn, allocs, L, B, C):
     return int_allocs
 
 
-
-
-def run_policy(equal, policy, cmdloads):
-
-    ni, nn, ranks, allocs, loads = read_current_alloc()
-
-    # print 'ni =', ni
-    # print 'nn =', nn
-    # print 'allocs =', allocs
-    # print 'loads =', loads
-    Ll = []
+def make_topology(ni, nn, nanosloads):
     Brows = []
     for group in range(0,ni):
         load = 0
         Brow = []
         for node in range(0,nn):
-            if (group,node) in loads:
-                load += 1.0 * loads[(group,node)]
+            if (group,node) in nanosloads:
                 Brow.append(1.0)
             else:
                 Brow.append(0.0)
-        Ll.append(load)
         Brows.append(Brow)
+    return Brows
 
-    if not cmdloads is None:
-        Ll = [float(x) for x in cmdloads.split(',')]
+def run_policy(ni, nn, ranks, allocs, topology, loads, policy):
 
-    # Modify problem depending on the policy
-    if equal:
-        # Ignore real loads, set all to 1.0
-        Ll = [1.0] * ni
+    # print 'ni =', ni
+    # print 'nn =', nn
+    # print 'allocs =', allocs
+    # print 'loads =', loads
 
 
     # Load vector
-    L = matrix(Ll)
+    L = matrix(loads)
 
     # Topology matrix
-    B = matrix(Brows).trans()
+    B = matrix(topology).trans()
 
     # Available cores vector
     C = matrix( [[48]] * nn).trans()
-    print 'Current allocation'
-    printout(ni,nn,ranks,allocs,L)
 
     if max(L) == 0.0:
         # Currently no work!!!
@@ -300,14 +286,11 @@ def run_policy(equal, policy, cmdloads):
         print 'No work!'
     else:
         opt_allocs = optimize(ni, nn, ranks, L, B, C, policy)
-    print 'Optimized allocation'
-    printout(ni,nn,ranks,opt_allocs,L)
-
     integer_allocs = make_integer(ni, nn, opt_allocs, L, B, C)
-    print 'Integer allocation'
-    printout(ni,nn,ranks,integer_allocs,L)
 
     write_new_alloc(ni, nn, ranks, B, integer_allocs)
+
+    return opt_allocs, integer_allocs
 
 def Usage(argv):
     print argv[0], '   opts <number-of-iterations>'
@@ -322,7 +305,7 @@ def main(argv):
 
     equal = False
     policy = 'optimized'
-    loads = None
+    cmdloads = None
     try:
         opts, args = getopt.getopt( argv[1:], "h", ["help", "equal", "master", "slaves", "slave1", "loads="])
     except getopt.error, msg:
@@ -338,7 +321,7 @@ def main(argv):
             policy = o[2:]
             print 'policy', policy
         elif o == '--loads':
-            loads = a
+            cmdloads = a
 
     niter = 1
     if len(args) == 1:
@@ -347,7 +330,31 @@ def main(argv):
     for it in range(0,niter):
         if it > 0:
             time.sleep(2)
-        run_policy(equal, policy, loads)
+        ni, nn, ranks, allocs, nanosloads = read_current_alloc()
+        topology = make_topology(ni, nn, nanosloads)
+
+        # Modify problem depending on the policy
+        if equal:
+            # Ignore real loads, set all to 1.0
+            loads = [1.0] * ni
+        elif not cmdloads is None:
+            # Use loads given on command line
+            loads = [float(x) for x in cmdloads.split(',')]
+        else:
+            # Use loads provided by Nanos
+            loads = [ sum( [ nanosloads.get((group,node),0) for group in range(0,ni)]) for node in range(0,nn) ]
+
+        print 'Current allocation'
+        printout(ni,nn,ranks,allocs,loads)
+
+        opt_allocs, integer_allocs = run_policy(ni, nn, ranks, allocs, topology, loads, policy)
+
+        print 'Optimized allocation'
+        printout(ni,nn,ranks,opt_allocs,loads)
+
+        print 'Integer allocation'
+        printout(ni,nn,ranks,integer_allocs,loads)
+
 
 
 if __name__ == '__main__':
