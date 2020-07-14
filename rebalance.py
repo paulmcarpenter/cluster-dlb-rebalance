@@ -100,7 +100,7 @@ def printout(ni,nn,ranks,allocs,loads):
     print '           ' + ('%10s' % '---') * nn
     print '           ' + ('%10.2f' * nn) % tuple(used)
 
-def optimize(ni, nn, ranks, L, B, C, policy):
+def optimize(ni, nn, ranks, L, B, C, policy, min_alloc):
     # Minimise      -t                                        (i.e. maximise worst-case cores per load)
     #
     #                   N
@@ -118,46 +118,49 @@ def optimize(ni, nn, ranks, L, B, C, policy):
 
     # Variables are t, a_ij  (but only when B_ij = 1; otherwise will get bogus values for the other a_ij)
 
-    #  For which (group,node) do we need an a_ij
+    # All a_{ij}
+    entries_all = [(group,node) for group in range(0,ni)  
+                                for node in range(0,nn) 
+                                    if B[group,node] != 0]
 
-    # This depends on the policy
+    pos_all = range(0, len(entries_all))
+    #  For which (group,node) are the a_{ij} variable?
     if policy == 'optimized':
         # Optimized: have all a_ij
-        entries = [(group,node) for group in range(0,ni)  
-                                    for node in range(0,nn) 
-                                        if B[group,node] != 0]
+        pos_var = pos_all
+        
     elif policy == 'master':
         # Only have masters
-        entries = [(group,node) for group in range(0,ni) 
-                                    for node in range(0,nn) 
+        pos_var = [j for j,(group,node) in enumerate(entries_all) 
                                         if ranks[(group,0)] == node ]
     elif policy == 'slaves':
         # Only have slaves 
-        entries = [(group,node) for group in range(0,ni)  
-                                    for node in range(0,nn) 
+        pos_var = [j for j,(group,node) in enumerate(entries_all)
                                         if B[group,node] != 0 and ranks[(group,0)] != node ]
 
     elif policy == 'slave1':
         # Only have slave 1
-        entries = [(group,node) for group in range(0,ni)  
-                                    for node in range(0,nn) 
+        pos_var = [j for j,(group,node) in enumerate(entries_all)
                                         if ranks[(group,1)] == node ]
     else:
         assert False
 
-    num_aij = len(entries)
-    num_variables = 1 + num_aij   # including t
+    pos_fixed = [j for j in pos_all if not j in pos_var]
+
+    num_aij_all = len(pos_all)
+    num_aij_var = len(pos_var)
+    num_variables = 1 + num_aij_all   # including t
 
     # Objective function to minimise: t
-    c = matrix( [[-1.0]] + [[0.0]] * num_aij).trans()
+    c = matrix( [[-1.0]] + [[0.0]] * num_aij_all).trans()
 
-    # LHS of constraints: one per node and one per group
+    # LHS of constraints
     Ai = []
     bi = []
-    # Constraints [1]
+    # Constraints [1]: one per node
     for node in range(0,nn):
         row = [0.0] #  coefficient of t is zero in [3]
-        for (group,n) in entries:
+        for (group,n) in entries_all:
             if n == node:
                 if ranks[(group,0)] == node:
                     row.append(1.0)   # This variable has coefficient 1 in [1]
@@ -167,38 +170,53 @@ def optimize(ni, nn, ranks, L, B, C, policy):
                 row.append(0)   # This variable has coefficient 0 in [1]
         Ai.append(row)          # LHS of [1]
         bi.append(C[node])      # RHS of [1]
-    # Constraints [2]
+    # Constraints [2]: one per group
     for group in range(0,ni):
         # Sum up the nodes in this group
         row = [L[group]]   # Coefficient of t is Lj (j=group)
-        for (i,node) in entries:
+        for (i,node) in entries_all:
             if i == group:                 # Variable affects this group
                 row.append(-1.0)
             else:
                 row.append(0.0)
         Ai.append(row)         # LHS of [2]
         bi.append(0.0)         # RHS of [2]
-    # Constraints [3]
-    for k,(group,node) in enumerate(entries):
+    # Constraints [3]: for variable entries
+    for k in pos_var:
+        group,node = entries_all[k]
         row = [0.0] * num_variables
         row[k+1] = -1.0
         Ai.append(row)        # LHS of [3]
         if ranks[(group,0)] == node:
-            bi.append(-1.0)          # RHS of [3b]
+            bi.append(-max(min_alloc,1.0))          # RHS of [3b]
         else:
-            bi.append(0.0)           # RHS of [3a]
+            bi.append(-min_alloc)           # RHS of [3a]
+    # Fixed entries (fixed to min_alloc)
+    for k in pos_fixed:
+        group,node = entries_all[k]
+        print 'a_ij', group, node, 'must be', min_alloc
+        # a_ij >= min_alloc
+        row = [0.0] * num_variables
+        row[k+1] = -1.0
+        Ai.append(row)        # LHS of [3]
+        bi.append(-min_alloc)           # RHS of [3a]
+        # a_ij <= min_alloc
+        row = [0.0] * num_variables
+        row[k+1] = 1.0
+        Ai.append(row)        # LHS of [3]
+        bi.append(min_alloc)           # RHS of [3a]
 
     A = matrix(Ai).trans()
-    # print 'A', A.size
-    # print(A)
+    print 'A', A.size
+    print(A)
     b = matrix(bi)
-    # print 'b', b.size
-    # print(b)
+    print 'b', b.size
+    print(b)
 
     sol = solvers.lp( c, A, b)
 
     opt_allocs = {}
-    for k,(group,node) in enumerate(entries):
+    for k,(group,node) in enumerate(entries_all):
             opt_allocs[(group,node)] = sol['x'][1 + k]
 
     for group in range(0,ni):
@@ -263,13 +281,12 @@ def make_topology(ni, nn, nanosloads):
         Brows.append(Brow)
     return Brows
 
-def run_policy(ni, nn, ranks, allocs, topology, loads, policy):
+def run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_alloc):
 
     # print 'ni =', ni
     # print 'nn =', nn
     # print 'allocs =', allocs
     # print 'loads =', loads
-
 
     # Load vector
     L = matrix(loads)
@@ -285,7 +302,7 @@ def run_policy(ni, nn, ranks, allocs, topology, loads, policy):
         opt_allocs = allocs
         print 'No work!'
     else:
-        opt_allocs = optimize(ni, nn, ranks, L, B, C, policy)
+        opt_allocs = optimize(ni, nn, ranks, L, B, C, policy, min_alloc)
     integer_allocs = make_integer(ni, nn, opt_allocs, L, B, C)
 
     write_new_alloc(ni, nn, ranks, B, integer_allocs)
@@ -300,14 +317,16 @@ def Usage(argv):
     print '   --slaves       No work on the master'
     print '   --slave1       Work only on the first slave'
     print '   --loads l      Specify the loads (comma-separated)'
+    print '   --min m        Set minimum allocation per instance to m cores'
 
 def main(argv):
 
     equal = False
     policy = 'optimized'
     cmdloads = None
+    min_alloc = 1 # Every instance has at least one core
     try:
-        opts, args = getopt.getopt( argv[1:], "h", ["help", "equal", "master", "slaves", "slave1", "loads="])
+        opts, args = getopt.getopt( argv[1:], "h", ["help", "equal", "master", "slaves", "slave1", "loads=", "min="])
     except getopt.error, msg:
         print msg
         print "for help use --help"
@@ -322,6 +341,8 @@ def main(argv):
             print 'policy', policy
         elif o == '--loads':
             cmdloads = a
+        elif o == '--min':
+            min_alloc = int(a)
 
     niter = 1
     if len(args) == 1:
@@ -347,7 +368,7 @@ def main(argv):
         print 'Current allocation'
         printout(ni,nn,ranks,allocs,loads)
 
-        opt_allocs, integer_allocs = run_policy(ni, nn, ranks, allocs, topology, loads, policy)
+        opt_allocs, integer_allocs = run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_alloc)
 
         print 'Optimized allocation'
         printout(ni,nn,ranks,opt_allocs,loads)
