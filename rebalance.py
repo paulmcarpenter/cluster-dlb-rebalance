@@ -43,6 +43,8 @@ def read_current_alloc():
         if m:
             group = int(m.group(1))
             rank = int(m.group(2))
+            if rank > len(ranktonode):
+                return None # Can happen when new program starting: just ignore
             node = ranktonode[rank]
             max_group = max(group, max_group)
             max_node = max(node, max_node)
@@ -351,7 +353,11 @@ def main(argv):
     for it in range(0,niter):
         if it > 0:
             time.sleep(2)
-        ni, nn, ranks, allocs, nanosloads = read_current_alloc()
+        x = read_current_alloc()
+        if x is None:
+            # Happens if program changes: just wait and try again
+            continue
+        ni, nn, ranks, allocs, nanosloads = x
         topology = make_topology(ni, nn, nanosloads)
 
         # Modify problem depending on the policy
