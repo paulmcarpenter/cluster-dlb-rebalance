@@ -25,6 +25,19 @@ def myblock(l):
 def zeros(rows,cols):
     return matrix(0, (rows,cols))
 
+def isint(s):
+    if re.match('^[0-9]*$', s):
+        return True
+    else:
+        return False
+
+def isfloat(s):
+    if isint(s):
+        return True
+    if re.match('^[0-9]*\.[0-9]*$', s):
+        return True
+    else:
+        return False
 
 def read_current_alloc():
     f = open('.map', 'r')
@@ -50,6 +63,10 @@ def read_current_alloc():
             max_node = max(node, max_node)
             f = open('.balance/' + fname)
             l = f.readline().strip().split(' ')
+            if len(l) < 3:
+                return None
+            if not isint(l[0]) and isfloat(l[1]) and isfloat(l[2]):
+                return None
             ranks[ (group,int(l[0])) ] = node
             allocs[ (group,node) ] = float(l[1])
             loads[ (group,node) ] = float(l[2])
