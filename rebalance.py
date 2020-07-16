@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+import os
 import sys
 import cvxopt
 import re
@@ -371,6 +372,10 @@ def main(argv):
     for it in range(0,niter):
         if it > 0:
             time.sleep(2)
+            if os.path.exists('.kill'):
+                print 'Rebalance.py killed by .kill file'
+                os.system('rm .kill')
+                break
         x = read_current_alloc()
         if x is None:
             # Happens if program changes: just wait and try again
