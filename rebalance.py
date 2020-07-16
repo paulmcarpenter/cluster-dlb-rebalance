@@ -44,7 +44,8 @@ def read_current_alloc():
     f = open('.map', 'r')
     line = f.readline()
     nn = line.strip().split(' ')
-    ranktonode = [int(n) for n in nn]
+    extranktonode = [int(n) for n in nn]
+    extranktogroup = {}
 
     fnames = listdir('.balance')
     max_group = 0
@@ -56,10 +57,11 @@ def read_current_alloc():
         m = re.match(r'load-([0-9*])-([0-9]*)', fname)
         if m:
             group = int(m.group(1))
-            rank = int(m.group(2))
-            if rank > len(ranktonode):
+            extrank = int(m.group(2))
+            if extrank > len(extranktonode):
                 return None # Can happen when new program starting: just ignore
-            node = ranktonode[rank]
+            node = extranktonode[extrank]
+            extranktogroup[extrank] = group
             max_group = max(group, max_group)
             max_node = max(node, max_node)
             f = open('.balance/' + fname)
@@ -73,7 +75,7 @@ def read_current_alloc():
             loads[ (group,node) ] = float(l[2])
             f.close()
         
-    return max_group+1, max_node+1, ranks, allocs, loads
+    return extranktonode, extranktogroup, max_group+1, max_node+1, ranks, allocs, loads
     
 def write_new_alloc(ni, nn, ranks, B, opt_allocs):
     for group in range(0,ni):
@@ -380,8 +382,9 @@ def main(argv):
         if x is None:
             # Happens if program changes: just wait and try again
             continue
-        ni, nn, ranks, allocs, nanosloads = x
+        extranktonode, extranktogroup, ni, nn, ranks, allocs, nanosloads = x
         topology = make_topology(ni, nn, nanosloads)
+        print 'nanosloads', nanosloads
 
         # Modify problem depending on the policy
         if equal:
@@ -392,7 +395,10 @@ def main(argv):
             loads = [float(x) for x in cmdloads.split(',')]
         else:
             # Use loads provided by Nanos
-            loads = [ sum( [ nanosloads.get((group,node),0) for group in range(0,ni)]) for node in range(0,nn) ]
+            loads = [0.0] * ni
+            for (group,extrank),load in nanosloads.items():
+                group = extranktogroup[extrank]
+                loads[group] += load
 
         print 'Current allocation'
         printout(ni,nn,ranks,allocs,loads)
