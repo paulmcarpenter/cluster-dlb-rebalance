@@ -226,12 +226,13 @@ def optimize(ni, nn, ranks, L, B, C, policy, min_alloc):
         bi.append(min_alloc)           # RHS of [3a]
 
     A = matrix(Ai).trans()
-    print 'A', A.size
-    print(A)
+    # print 'A', A.size
+    # print(A)
     b = matrix(bi)
-    print 'b', b.size
-    print(b)
+    # print 'b', b.size
+    # print(b)
 
+    solvers.options['show_progress'] = False
     sol = solvers.lp( c, A, b)
 
     opt_allocs = {}
