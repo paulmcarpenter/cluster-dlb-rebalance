@@ -41,36 +41,57 @@ def isfloat(s):
 		return False
 
 def read_current_alloc():
-	f = open('.map', 'r')
-	line = f.readline()
-	nn = line.strip().split(' ')
-	extranktonode = [int(n) for n in nn]
-	extranktogroup = {}
-
-	fnames = listdir('.balance')
-	max_group = 0
-	max_node = 0
+	# Read map files
+	mapfiles = [f for f in os.listdir('.hybrid') if f.startswith('map')]
 	ranks = {}
+	extranktonode = []
+	extranktogroup = []
+	for j, mapfile in enumerate(sorted(mapfiles)):
+		m = re.match('map([0-9]*)$', mapfile)
+		if not m:
+			return None
+		extrank = int(m.group(1))
+		if j != extrank:
+			return
+		f = open('.hybrid/' + mapfile, 'r')
+		s = f.readline().split()  # externalRank r
+		assert s[0] == 'externalRank'
+		assert int(s[1]) == extrank
+		s = f.readline().split()  # groupNum g
+		assert s[0] == 'groupNum'
+		groupNum = int(s[1])
+		s = f.readline().split()  # internalRank i
+		assert s[0] == 'internalRank'
+		internalRank = int(s[1])
+		s = f.readline().split()  # nodeNum n
+		assert s[0] == 'nodeNum'
+		nodeNum = int(s[1])
+
+		extranktogroup.append(groupNum)
+		extranktonode.append(nodeNum)
+		ranks[ (groupNum,internalRank)] = nodeNum
+
+	max_group = max(extranktogroup)
+	max_node = max(extranktonode)
+
+	fnames = os.listdir('.hybrid')
 	allocs = {}
 	loads = {}
 	for fname in fnames:
-		m = re.match(r'load-([0-9*])-([0-9]*)', fname)
+		m = re.match(r'utilization([0-9*])', fname)
 		if m:
-			group = int(m.group(1))
-			extrank = int(m.group(2))
-			if extrank > len(extranktonode):
-				return None # Can happen when new program starting: just ignore
+			extrank = int(m.group(1))
+			group = extranktogroup[extrank]
 			node = extranktonode[extrank]
-			extranktogroup[extrank] = group
-			max_group = max(group, max_group)
-			max_node = max(node, max_node)
-			f = open('.balance/' + fname)
-			l = f.readline().strip().split(' ')
+
+			f = open('.hybrid/' + fname)
+			for line in f.readlines():
+				pass
+			l = line.strip().split(' ')
 			if len(l) < 3:
 				return None
-			if not isint(l[0]) and isfloat(l[1]) and isfloat(l[2]):
+			if not isfloat(l[0]) and isint(l[1]) and isfloat(l[2]):
 				return None
-			ranks[ (group,int(l[0])) ] = node
 			allocs[ (group,node) ] = float(l[1])
 			loads[ (group,node) ] = float(l[2])
 			f.close()
@@ -79,28 +100,34 @@ def read_current_alloc():
 	
 def write_new_alloc(ni, nn, ranks, B, opt_allocs):
 	for group in range(0,ni):
-		f = open('.balance/alloc-%d' % group, 'w')
+		f = open('.hybrid/alloc%d' % group, 'w')
 		for rank in range(0,nn):
 			if (group,rank) in ranks.keys():
 				node = ranks[(group,rank)]
 				print >>f, opt_allocs[(group,node)]
+			else:
+				break
 		f.close()
 
 	
 	
 
 def printout(ni,nn,ranks,allocs,loads):
-	print '			  ' + ' ' * 5 * nn + 'NUM CORES ' + ' ' * 5 * nn + 'Total_cores   Load	 Load/Total_cores'
-	print '			  ' + ' ' * 5 * nn + '	 node	' + ' ' * 5 * nn + '	'
-	print '			  ' + ('%10d' * nn) % tuple(range(0,nn))
+	print '        ' + ' ' * 5 * nn + 'NUM CORES ' + ' ' * 6 * nn + 'Total_cores   Load	 Load/Total_cores'
+	print '        ' + ' ' * 5 * nn + '	 node	' + ' ' * 6 * nn + '	'
+	print '           ' + ('%11d' * nn) % tuple(range(0,nn))
 
 	for group in range(0, ni):
 		print 'Instance %2d' % group,
 		for node in range(0, nn):
 			if (group,node) in allocs:
-				print '%10.2f' % allocs[(group,node)],
+				print '%9.2f' % allocs[(group,node)],
+				if ranks[(group,0)] == 0:
+					print '#',
+				else:
+					print ' ',
 			else:
-				print '%10s' % '-',
+				print '%11s' % '-',
 		load = loads[group]
 		total_c = 0
 		for node in range(0, nn):
@@ -393,7 +420,7 @@ def main(argv):
 			continue
 		extranktonode, extranktogroup, ni, nn, ranks, allocs, nanosloads = x
 		topology = make_topology(ni, nn, nanosloads)
-		print 'nanosloads', nanosloads
+		# print 'nanosloads', nanosloads
 
 		# Modify problem depending on the policy
 		if equal:
@@ -404,9 +431,9 @@ def main(argv):
 			loads = [float(x) for x in cmdloads.split(',')]
 		else:
 			# Use loads provided by Nanos
+			print 'ni=', ni
 			loads = [0.0] * ni
-			for (group,extrank),load in nanosloads.items():
-				group = extranktogroup[extrank]
+			for (group,node),load in nanosloads.items():
 				loads[group] += load
 
 		print 'Current allocation'
