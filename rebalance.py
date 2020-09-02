@@ -341,6 +341,7 @@ def Usage(argv):
     print '   --slave1       Work only on the first slave'
     print '   --loads l      Specify the loads (comma-separated)'
     print '   --min m        Set minimum allocation per instance to m cores'
+    print '   --wait secs    Wait time between rebalancings'
 
 def main(argv):
 
@@ -348,8 +349,9 @@ def main(argv):
     policy = 'optimized'
     cmdloads = None
     min_alloc = 1 # Every instance has at least one core
+    wait_time = 2 # seconds
     try:
-        opts, args = getopt.getopt( argv[1:], "h", ["help", "equal", "master", "slaves", "slave1", "loads=", "min="])
+        opts, args = getopt.getopt( argv[1:], "h", ["help", "equal", "master", "slaves", "slave1", "loads=", "min=", 'wait='])
     except getopt.error, msg:
         print msg
         print "for help use --help"
@@ -366,14 +368,20 @@ def main(argv):
             cmdloads = a
         elif o == '--min':
             min_alloc = int(a)
+        elif o == '--wait':
+            wait_time = int(a)
 
     niter = 1
     if len(args) == 1:
         niter = int(args[0])
     # print 'Number of iterations', niter
+    did_rebalance = False
     for it in range(0,niter):
         if it > 0:
-            time.sleep(2)
+            if did_rebalance:
+                time.sleep(wait_time)
+            else:
+                time.sleep(1)
             if os.path.exists('.kill'):
                 print 'Rebalance.py killed by .kill file'
                 os.system('rm .kill')
@@ -381,6 +389,7 @@ def main(argv):
         x = read_current_alloc()
         if x is None:
             # Happens if program changes: just wait and try again
+            did_rebalance = False
             continue
         extranktonode, extranktogroup, ni, nn, ranks, allocs, nanosloads = x
         topology = make_topology(ni, nn, nanosloads)
@@ -410,6 +419,7 @@ def main(argv):
 
         print 'Integer allocation'
         printout(ni,nn,ranks,integer_allocs,loads)
+        did_rebalance = True
 
 
 
