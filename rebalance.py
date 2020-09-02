@@ -9,29 +9,14 @@ from cvxopt import matrix, solvers
 
 from os import listdir
 
-
-def myblock(l):
-	# numpy didn't work on MareNostrum!!!
-	newm = []
-	for blockrow in l:
-		assert len(blockrow) >= 1
-		nrows,ncol0 = blockrow[0].size
-		for row in range(0,nrows):
-			r = []
-			for m in blockrow:
-				r.extend( list(m[row,:]))
-			newm.append(r)
-	return matrix(newm).trans()
-
-def zeros(rows,cols):
-	return matrix(0, (rows,cols))
-
+# Check whether the string is an integer
 def isint(s):
 	if re.match('^[0-9]*$', s):
 		return True
 	else:
 		return False
 
+# Check whether the string is a float
 def isfloat(s):
 	if isint(s):
 		return True
@@ -39,6 +24,12 @@ def isfloat(s):
 		return True
 	else:
 		return False
+
+
+def read_map_entry(label, line):
+	s = line.split()
+	assert(s[0] == label)
+	return int(s[1])
 
 def read_current_alloc():
 	# Read map files
@@ -54,18 +45,12 @@ def read_current_alloc():
 		if j != extrank:
 			return
 		f = open('.hybrid/' + mapfile, 'r')
-		s = f.readline().split()  # externalRank r
-		assert s[0] == 'externalRank'
-		assert int(s[1]) == extrank
-		s = f.readline().split()  # groupNum g
-		assert s[0] == 'groupNum'
-		groupNum = int(s[1])
-		s = f.readline().split()  # internalRank i
-		assert s[0] == 'internalRank'
-		internalRank = int(s[1])
-		s = f.readline().split()  # nodeNum n
-		assert s[0] == 'nodeNum'
-		nodeNum = int(s[1])
+
+		extrank2 = read_map_entry('externalRank', f.readline())
+		assert extrank2 == extrank
+		groupNum = read_map_entry('groupNum', f.readline())
+		internalRank = read_map_entry('internalRank', f.readline())
+		nodeNum = read_map_entry('nodeNum', f.readline())
 
 		extranktogroup.append(groupNum)
 		extranktonode.append(nodeNum)
@@ -431,7 +416,6 @@ def main(argv):
 			loads = [float(x) for x in cmdloads.split(',')]
 		else:
 			# Use loads provided by Nanos
-			print 'ni=', ni
 			loads = [0.0] * ni
 			for (group,node),load in nanosloads.items():
 				loads[group] += load
