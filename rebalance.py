@@ -9,6 +9,11 @@ from cvxopt import matrix, solvers
 
 from os import listdir
 
+monitor_time = 1.0
+
+def average(l):
+	return sum(l) / len(l)
+
 # Check whether the string is an integer
 def isint(s):
 	if re.match('^[0-9]*$', s):
@@ -32,6 +37,7 @@ def read_map_entry(label, line):
 	return int(s[1])
 
 def read_current_alloc():
+	global monitor_time
 	if not os.path.exists('.hybrid'):
 		return None
 	# Read map files
@@ -79,19 +85,22 @@ def read_current_alloc():
 
 			f = open('.hybrid/' + fname)
 			line = None
+			log = []
 			for line in f.readlines():
-				pass
-			if line is None:
+				s = line.strip().split(' ')
+				if len(s) < 3:
+					return None
+				log.append( (float(s[0]), int(s[1]), float(s[2])) )
+			if len(log) == 0:
 				return None
-			l = line.strip().split(' ')
-			if len(l) < 3:
-				return None
-			if not isfloat(l[0]) and isint(l[1]) and isfloat(l[2]):
-				return None
+			end_time = log[-1][0]
+			recent_log = [ (t,alloc,load) for (t,alloc,load) in log  if t >= end_time - monitor_time ]
+			print 'recent_log', recent_log
+
 			assert not (group,node) in allocs
 			assert not (group,node) in loads
-			allocs[ (group,node) ] = float(l[1])
-			loads[ (group,node) ] = float(l[2])
+			allocs[ (group,node) ] = average( [ alloc for (t,alloc,load) in recent_log])
+			loads[ (group,node) ] = average( [ load for (t,alloc,load) in recent_log])
 			f.close()
 		
 	return extranktonode, extranktogroup, max_group+1, max_node+1, ranks, allocs, loads
@@ -366,17 +375,19 @@ def Usage(argv):
 	print '   --slave1		 Work only on the first slave'
 	print '   --loads l		 Specify the loads (comma-separated)'
 	print '   --min m		 Set minimum allocation per instance to m cores'
+	print '   --monitor secs Monitor load over past time period of given length'
 	print '   --wait secs	 Wait time between rebalancings'
 
 def main(argv):
 
+	global monitor_time
 	equal = False
 	policy = 'optimized'
 	cmdloads = None
 	min_alloc = 1 # Every instance has at least one core
 	wait_time = 2 # seconds
 	try:
-		opts, args = getopt.getopt( argv[1:], "h", ["help", "equal", "master", "slaves", "slave1", "loads=", "min=", 'wait='])
+		opts, args = getopt.getopt( argv[1:], "h", ["help", "equal", "master", "slaves", "slave1", "loads=", "min=", 'wait=', 'monitor='])
 	except getopt.error, msg:
 		print msg
 		print "for help use --help"
@@ -395,6 +406,8 @@ def main(argv):
 			min_alloc = int(a)
 		elif o == '--wait':
 			wait_time = int(a)
+		elif o == '--monitor':
+			monitor_time = float(a)
 
 	niter = 1
 	if len(args) == 1:
@@ -403,6 +416,7 @@ def main(argv):
 	did_rebalance = False
 	for it in range(0,niter):
 		if it > 0:
+			sys.stdout.flush()
 			if did_rebalance:
 				time.sleep(wait_time)
 			else:
