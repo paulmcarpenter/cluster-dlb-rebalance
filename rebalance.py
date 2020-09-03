@@ -32,19 +32,26 @@ def read_map_entry(label, line):
 	return int(s[1])
 
 def read_current_alloc():
+	if not os.path.exists('.hybrid'):
+		return None
 	# Read map files
 	mapfiles = [f for f in os.listdir('.hybrid') if f.startswith('map')]
-	ranks = {}
-	extranktonode = []
-	extranktogroup = []
-	for j, mapfile in enumerate(sorted(mapfiles)):
+
+	# Get all the external ranks for which we have a map file
+	extranks = []
+	for mapfile in mapfiles:
 		m = re.match('map([0-9]*)$', mapfile)
 		if not m:
 			return None
-		extrank = int(m.group(1))
+		extranks.append(int(m.group(1)))
+
+	ranks = {}
+	extranktonode = []
+	extranktogroup = []
+	for j, extrank in enumerate(sorted(extranks)):
 		if j != extrank:
 			return
-		f = open('.hybrid/' + mapfile, 'r')
+		f = open('.hybrid/map%d' % extrank, 'r')
 
 		extrank2 = read_map_entry('externalRank', f.readline())
 		assert extrank2 == extrank
@@ -55,7 +62,8 @@ def read_current_alloc():
 		extranktogroup.append(groupNum)
 		extranktonode.append(nodeNum)
 		ranks[ (groupNum,internalRank)] = nodeNum
-
+		
+	# print 'ranks(group, internalrank): ', ranks
 	max_group = max(extranktogroup)
 	max_node = max(extranktonode)
 
@@ -63,20 +71,25 @@ def read_current_alloc():
 	allocs = {}
 	loads = {}
 	for fname in fnames:
-		m = re.match(r'utilization([0-9*])', fname)
+		m = re.match(r'utilization([0-9]*)$', fname)
 		if m:
 			extrank = int(m.group(1))
 			group = extranktogroup[extrank]
 			node = extranktonode[extrank]
 
 			f = open('.hybrid/' + fname)
+			line = None
 			for line in f.readlines():
 				pass
+			if line is None:
+				return None
 			l = line.strip().split(' ')
 			if len(l) < 3:
 				return None
 			if not isfloat(l[0]) and isint(l[1]) and isfloat(l[2]):
 				return None
+			assert not (group,node) in allocs
+			assert not (group,node) in loads
 			allocs[ (group,node) ] = float(l[1])
 			loads[ (group,node) ] = float(l[2])
 			f.close()
@@ -98,16 +111,16 @@ def write_new_alloc(ni, nn, ranks, B, opt_allocs):
 	
 
 def printout(ni,nn,ranks,allocs,loads):
-	print '        ' + ' ' * 5 * nn + 'NUM CORES ' + ' ' * 6 * nn + 'Total_cores   Load	 Load/Total_cores'
-	print '        ' + ' ' * 5 * nn + '	 node	' + ' ' * 6 * nn + '	'
-	print '           ' + ('%11d' * nn) % tuple(range(0,nn))
+	print '     ' + ' ' * 5 * nn + 'NUM CORES ' + ' ' * 6 * nn + 'Total_cores   Load	 Load/Total_cores'
+	print '     ' + ' ' * 5 * nn + '	 node	' + ' ' * 6 * nn + '	'
+	print '       ' + ('%11d' * nn) % tuple(range(0,nn))
 
 	for group in range(0, ni):
-		print 'Instance %2d' % group,
+		print 'Group %2d' % group,
 		for node in range(0, nn):
 			if (group,node) in allocs:
 				print '%9.2f' % allocs[(group,node)],
-				if ranks[(group,0)] == 0:
+				if ranks[(group,0)] == node:
 					print '#',
 				else:
 					print ' ',
@@ -131,8 +144,8 @@ def printout(ni,nn,ranks,allocs,loads):
 		for group in range(0,ni):
 			u += allocs.get((group,node),0)
 		used.append(u)
-	print '			  ' + ('%10s' % '---') * nn
-	print '			  ' + ('%10.2f' * nn) % tuple(used)
+	print '      ' + ('%10s' % '---') * nn
+	print '      ' + ('%10.2f' * nn) % tuple(used)
 
 def optimize(ni, nn, ranks, L, B, C, policy, min_alloc):
 	# Minimise		-t										  (i.e. maximise worst-case cores per load)
