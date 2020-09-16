@@ -88,19 +88,20 @@ def read_current_alloc():
 			log = []
 			for line in f.readlines():
 				s = line.strip().split(' ')
-				if len(s) < 3:
+				if len(s) < 4:
 					return None
-				log.append( (float(s[0]), int(s[1]), float(s[2])) )
+				#           Timestamp     Global alloc   curr DLB alloc  Busy cores
+				log.append( (float(s[0]), int(s[1]),     int(s[2]),      float(s[3])) )
 			if len(log) == 0:
 				return None
 			end_time = log[-1][0]
-			recent_log = [ (t,alloc,load) for (t,alloc,load) in log  if t >= end_time - monitor_time ]
-			print 'recent_log', recent_log
+			recent_log = [ (t,alloc,dlballoc,load) for (t,alloc,dlballoc,load) in log  if t >= end_time - monitor_time ]
+			# print 'recent_log', recent_log
 
 			assert not (group,node) in allocs
 			assert not (group,node) in loads
-			allocs[ (group,node) ] = average( [ alloc for (t,alloc,load) in recent_log])
-			loads[ (group,node) ] = average( [ load for (t,alloc,load) in recent_log])
+			allocs[ (group,node) ] = average( [ alloc for (t,alloc,dlballoc,load) in recent_log])
+			loads[ (group,node) ] = average( [ load for (t,alloc,dlballoc,load) in recent_log])
 			f.close()
 		
 	return extranktonode, extranktogroup, max_group+1, max_node+1, ranks, allocs, loads
@@ -286,7 +287,7 @@ def optimize(ni, nn, ranks, L, B, C, policy, min_alloc):
 	return opt_allocs
 
 
-def make_integer(ni, nn, allocs, L, B, C):
+def make_integer(ni, nn, allocs, L, B, C, fill_idle):
 	int_allocs = {}
 	for node in range(0,nn):
 		indices = [group for group in range(0,ni) if B[(group,node)]>0 and allocs[(group,node)] > 0 ]
@@ -306,13 +307,14 @@ def make_integer(ni, nn, allocs, L, B, C):
 			frac_lost_and_j.sort()
 			frac_lost_and_j.reverse()
 
-			extra_cores = C[group] - sum(ncores_int)
-			# print 'extra_cores', extra_cores
-			for c in range(0,extra_cores):
-				# Sometimes it is not necessary to use all cores: in this case we just keep going
-				# filling up the available cores anyway
-				frac,j = frac_lost_and_j[c % len(frac_lost_and_j)]
-				ncores_int[j] = ncores_int[j] + 1
+			if fill_idle:
+				extra_cores = C[group] - sum(ncores_int)
+				# print 'extra_cores', extra_cores
+				for c in range(0,extra_cores):
+					# Sometimes it is not necessary to use all cores: in this case we just keep going
+					# filling up the available cores anyway
+					frac,j = frac_lost_and_j[c % len(frac_lost_and_j)]
+					ncores_int[j] = ncores_int[j] + 1
 
 		for j,group in enumerate(indices):
 			int_allocs[(group,node)] = ncores_int[j]
@@ -338,7 +340,7 @@ def make_topology(ni, nn, nanosloads):
 		Brows.append(Brow)
 	return Brows
 
-def run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_alloc):
+def run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_alloc, fill_idle):
 
 	# print 'ni =', ni
 	# print 'nn =', nn
@@ -360,7 +362,7 @@ def run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_alloc):
 		print 'No work!'
 	else:
 		opt_allocs = optimize(ni, nn, ranks, L, B, C, policy, min_alloc)
-	integer_allocs = make_integer(ni, nn, opt_allocs, L, B, C)
+	integer_allocs = make_integer(ni, nn, opt_allocs, L, B, C, fill_idle)
 
 	write_new_alloc(ni, nn, ranks, B, integer_allocs)
 
@@ -377,6 +379,7 @@ def Usage(argv):
 	print '   --min m		 Set minimum allocation per instance to m cores'
 	print '   --monitor secs Monitor load over past time period of given length'
 	print '   --wait secs	 Wait time between rebalancings'
+	print '   --no-fill      Do not use whole nodes if not necessary'
 
 def main(argv):
 
@@ -386,8 +389,9 @@ def main(argv):
 	cmdloads = None
 	min_alloc = 1 # Every instance has at least one core
 	wait_time = 2 # seconds
+	fill_idle = True
 	try:
-		opts, args = getopt.getopt( argv[1:], "h", ["help", "equal", "master", "slaves", "slave1", "loads=", "min=", 'wait=', 'monitor='])
+		opts, args = getopt.getopt( argv[1:], "h", ["help", "equal", "master", "slaves", "slave1", "loads=", "min=", 'wait=', 'monitor=', 'no-fill'])
 	except getopt.error, msg:
 		print msg
 		print "for help use --help"
@@ -408,6 +412,8 @@ def main(argv):
 			wait_time = int(a)
 		elif o == '--monitor':
 			monitor_time = float(a)
+		elif o == '--no-fill':
+			fill_idle = False
 
 	niter = 1
 	if len(args) == 1:
@@ -450,7 +456,7 @@ def main(argv):
 		print 'Current allocation'
 		printout(ni,nn,ranks,allocs,loads)
 
-		opt_allocs, integer_allocs = run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_alloc)
+		opt_allocs, integer_allocs = run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_alloc, fill_idle)
 
 		print 'Optimized allocation'
 		printout(ni,nn,ranks,opt_allocs,loads)
