@@ -90,7 +90,7 @@ def read_current_alloc():
 				s = line.strip().split(' ')
 				if len(s) < 4:
 					return None
-				#           Timestamp     Global alloc   curr DLB alloc  Busy cores
+				#           Timestamp     Global alloc   curr DLB alloc  Total busy cores
 				log.append( (float(s[0]), int(s[1]),     int(s[2]),      float(s[3])) )
 			if len(log) == 0:
 				return None
