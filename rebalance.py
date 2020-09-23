@@ -157,7 +157,7 @@ def printout(ni,nn,ranks,allocs,loads):
 	print '      ' + ('%10s' % '---') * nn
 	print '      ' + ('%10.2f' * nn) % tuple(used)
 
-def optimize(ni, nn, ranks, L, B, C, policy, min_alloc):
+def optimize(ni, nn, ranks, L, B, C, policy, min_master, min_slave):
 	# Minimise		-t										  (i.e. maximise worst-case cores per load)
 	#
 	#					N
@@ -245,12 +245,16 @@ def optimize(ni, nn, ranks, L, B, C, policy, min_alloc):
 		row[k+1] = -1.0
 		Ai.append(row)		  # LHS of [3]
 		if ranks[(group,0)] == node:
-			bi.append(-max(min_alloc,1.0))			# RHS of [3b]
+			bi.append(-min_master)			# RHS of [3b]
 		else:
-			bi.append(-min_alloc)			# RHS of [3a]
+			bi.append(-min_slave)			# RHS of [3a]
 	# Fixed entries (fixed to min_alloc)
 	for k in pos_fixed:
 		group,node = entries_all[k]
+		if ranks[(group,0)] == node:
+			min_alloc = min_master
+		else:
+			min_alloc = min_slave
 		print 'a_ij', group, node, 'must be', min_alloc
 		# a_ij >= min_alloc
 		row = [0.0] * num_variables
@@ -307,14 +311,23 @@ def make_integer(ni, nn, allocs, L, B, C, fill_idle):
 			frac_lost_and_j.sort()
 			frac_lost_and_j.reverse()
 
+			# Number of cores not used so far
+			num_unused_cores = C[group] - sum(ncores_int)
+
 			if fill_idle:
-				extra_cores = C[group] - sum(ncores_int)
+				# Use up all the unallocated cores on the node
+				num_extra_cores = num_unused_cores
+			else:
+				# Not fill_idle: each truncated process can get at most one extra core
+				num_extra_cores = min(num_unused_cores, len(frac_lost_and_j))
 				# print 'extra_cores', extra_cores
-				for c in range(0,extra_cores):
-					# Sometimes it is not necessary to use all cores: in this case we just keep going
-					# filling up the available cores anyway
-					frac,j = frac_lost_and_j[c % len(frac_lost_and_j)]
-					ncores_int[j] = ncores_int[j] + 1
+
+			for c in range(0,num_extra_cores):
+				# Sometimes it is not necessary to use all cores: in this case we just keep going
+				# filling up the available cores anyway. The modulo operation just hands them
+				# out round-robin.
+				frac,j = frac_lost_and_j[c % len(frac_lost_and_j)]
+				ncores_int[j] = ncores_int[j] + 1
 
 		for j,group in enumerate(indices):
 			int_allocs[(group,node)] = ncores_int[j]
@@ -340,7 +353,7 @@ def make_topology(ni, nn, nanosloads):
 		Brows.append(Brow)
 	return Brows
 
-def run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_alloc, fill_idle):
+def run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_master, min_slave, fill_idle):
 
 	# print 'ni =', ni
 	# print 'nn =', nn
@@ -361,7 +374,7 @@ def run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_alloc, fill_i
 		opt_allocs = allocs
 		print 'No work!'
 	else:
-		opt_allocs = optimize(ni, nn, ranks, L, B, C, policy, min_alloc)
+		opt_allocs = optimize(ni, nn, ranks, L, B, C, policy, min_master, min_slave)
 	integer_allocs = make_integer(ni, nn, opt_allocs, L, B, C, fill_idle)
 
 	write_new_alloc(ni, nn, ranks, B, integer_allocs)
@@ -387,11 +400,15 @@ def main(argv):
 	equal = False
 	policy = 'optimized'
 	cmdloads = None
-	min_alloc = 1 # Every instance has at least one core
+	min_master = None
+	min_slave = None
 	wait_time = 2 # seconds
 	fill_idle = True
 	try:
-		opts, args = getopt.getopt( argv[1:], "h", ["help", "equal", "master", "slaves", "slave1", "loads=", "min=", 'wait=', 'monitor=', 'no-fill'])
+		opts, args = getopt.getopt( argv[1:], "h", ["help", "equal", "master",
+		                                            "slaves", "slave1", "loads=",
+													"min=", 'min-master=', 'min-slave=',
+													'wait=', 'monitor=', 'no-fill'])
 	except getopt.error, msg:
 		print msg
 		print "for help use --help"
@@ -406,14 +423,28 @@ def main(argv):
 			print 'policy', policy
 		elif o == '--loads':
 			cmdloads = a
+		elif o == '--min-master':
+			assert min_master is None
+			min_master = int(a)
 		elif o == '--min':
-			min_alloc = int(a)
+			assert min_master is None
+			assert min_slave is None
+			min_master = int(a)
+			min_slave = int(a)
+		elif o == '--min-slave':
+			assert min_slave is None
+			min_slave = int(a)
 		elif o == '--wait':
 			wait_time = int(a)
 		elif o == '--monitor':
 			monitor_time = float(a)
 		elif o == '--no-fill':
 			fill_idle = False
+
+	if min_master is None:
+		min_master = 1
+	if min_slave is None:
+		min_slave = 1
 
 	niter = 1
 	if len(args) == 1:
@@ -456,7 +487,7 @@ def main(argv):
 		print 'Current allocation'
 		printout(ni,nn,ranks,allocs,loads)
 
-		opt_allocs, integer_allocs = run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_alloc, fill_idle)
+		opt_allocs, integer_allocs = run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_master, min_slave, fill_idle)
 
 		print 'Optimized allocation'
 		printout(ni,nn,ranks,opt_allocs,loads)
