@@ -69,7 +69,7 @@ def read_current_alloc():
 		extranktonode.append(nodeNum)
 		ranks[ (groupNum,internalRank)] = nodeNum
 		
-	# print 'ranks(group, internalrank): ', ranks
+	# print('ranks(group, internalrank): ', ranks)
 	max_group = max(extranktogroup)
 	max_node = max(extranktonode)
 
@@ -96,7 +96,7 @@ def read_current_alloc():
 				return None
 			end_time = log[-1][0]
 			recent_log = [ (t,alloc,dlballoc,load) for (t,alloc,dlballoc,load) in log  if t >= end_time - monitor_time ]
-			# print 'recent_log', recent_log
+			# print('recent_log', recent_log)
 
 			assert not (group,node) in allocs
 			assert not (group,node) in loads
@@ -112,7 +112,7 @@ def write_new_alloc(ni, nn, ranks, B, opt_allocs):
 		for rank in range(0,nn):
 			if (group,rank) in ranks.keys():
 				node = ranks[(group,rank)]
-				print >>f, opt_allocs[(group,node)]
+				print(opt_allocs[(group,node)], file=f)
 			else:
 				break
 		f.close()
@@ -121,31 +121,31 @@ def write_new_alloc(ni, nn, ranks, B, opt_allocs):
 	
 
 def printout(ni,nn,ranks,allocs,loads):
-	print '     ' + ' ' * 5 * nn + 'NUM CORES ' + ' ' * 6 * nn + 'Total_cores   Load	 Load/Total_cores'
-	print '     ' + ' ' * 5 * nn + '	 node	' + ' ' * 6 * nn + '	'
-	print '       ' + ('%11d' * nn) % tuple(range(0,nn))
+	print('     ' + ' ' * 5 * nn + 'NUM CORES ' + ' ' * 6 * nn + 'Total_cores   Load	 Load/Total_cores')
+	print('     ' + ' ' * 5 * nn + '	 node	' + ' ' * 6 * nn + '	')
+	print('       ' + ('%11d' * nn) % tuple(range(0,nn)))
 
 	for group in range(0, ni):
-		print 'Group %2d' % group,
+		print('Group %2d ' % group, end='')
 		for node in range(0, nn):
 			if (group,node) in allocs:
-				print '%9.2f' % allocs[(group,node)],
+				print('%9.2f ' % allocs[(group,node)], end='')
 				if ranks[(group,0)] == node:
-					print '#',
+					print('# ', end='')
 				else:
-					print ' ',
+					print(' ', end='')
 			else:
-				print '%11s' % '-',
+				print('%11s ' % '-', end='')
 		load = loads[group]
 		total_c = 0
 		for node in range(0, nn):
 			total_c += allocs.get((group,node),0)
-		print '%10.2f' % total_c,
-		print '%10.2f' % load,
+		print('%10.2f ' % total_c, end='')
+		print('%10.2f ' % load, end='')
 		if total_c > 0:
-			print '%10.3f' % (load/total_c)
+			print('%10.3f ' % (load/total_c), end='')
 		else:
-			print '%10s' % 'inf'
+			print('%10s' % 'inf', end='')
 
 
 	used = []
@@ -154,8 +154,8 @@ def printout(ni,nn,ranks,allocs,loads):
 		for group in range(0,ni):
 			u += allocs.get((group,node),0)
 		used.append(u)
-	print '      ' + ('%10s' % '---') * nn
-	print '      ' + ('%10.2f' * nn) % tuple(used)
+	print('      ' + ('%10s' % '---') * nn)
+	print('      ' + ('%10.2f' * nn) % tuple(used))
 
 def optimize(ni, nn, ranks, L, B, C, policy, min_master, min_slave):
 	# Minimise		-t										  (i.e. maximise worst-case cores per load)
@@ -255,7 +255,7 @@ def optimize(ni, nn, ranks, L, B, C, policy, min_master, min_slave):
 			min_alloc = min_master
 		else:
 			min_alloc = min_slave
-		print 'a_ij', group, node, 'must be', min_alloc
+		print('a_ij', group, node, 'must be', min_alloc)
 		# a_ij >= min_alloc
 		row = [0.0] * num_variables
 		row[k+1] = -1.0
@@ -268,10 +268,10 @@ def optimize(ni, nn, ranks, L, B, C, policy, min_master, min_slave):
 		bi.append(min_alloc)		   # RHS of [3a]
 
 	A = matrix(Ai).trans()
-	# print 'A', A.size
+	# print('A', A.size)
 	# print(A)
 	b = matrix(bi)
-	# print 'b', b.size
+	# print('b', b.size)
 	# print(b)
 
 	solvers.options['show_progress'] = False
@@ -301,13 +301,13 @@ def make_integer(ni, nn, allocs, L, B, C, fill_idle):
 			ncores_int	= [int(allocs[(group,node)]) for group in indices]
 			total_cores = [sum([allocs[(group,n)] for n in range(0,nn) if B[(group,n)]>0]) for group in indices]
 			# load_per_cores = [L[indices[j]] / total_cores[j] for j in range(0,len(total_cores))]
-			# print 'node', node, 'indices', indices, 'cores', ncores, 'total_cores', total_cores, 'lpc', load_per_cores
+			# print('node', node, 'indices', indices, 'cores', ncores, 'total_cores', total_cores, 'lpc', load_per_cores)
 
 			# After rebalancing, all groups should have the same load-per-core
 			# Hence the slowdown is proportional to the fraction lost: (ncores - int(ncores)) / total_cores
 			frac_lost_and_j = [(1.0 * (ncores[j] - int(ncores[j])) / total_cores[j],j) for j in range(0,len(total_cores))]
-			# print 'node', node, 'indices', indices, 'cores', ncores, 'total_cores', total_cores, 'frac_lost', frac_lost_and_j
-			# print 'ncores_int', ncores_int
+			# print('node', node, 'indices', indices, 'cores', ncores, 'total_cores', total_cores, 'frac_lost', frac_lost_and_j)
+			# print('ncores_int', ncores_int)
 			frac_lost_and_j.sort()
 			frac_lost_and_j.reverse()
 
@@ -355,10 +355,10 @@ def make_topology(ni, nn, nanosloads):
 
 def run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_master, min_slave, fill_idle):
 
-	# print 'ni =', ni
-	# print 'nn =', nn
-	# print 'allocs =', allocs
-	# print 'loads =', loads
+	# print('ni =', ni)
+	# print('nn =', nn)
+	# print('allocs =', allocs)
+	# print('loads =', loads)
 
 	# Load vector
 	L = matrix(loads)
@@ -372,7 +372,7 @@ def run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_master, min_s
 	if max(L) == 0.0:
 		# Currently no work!!!
 		opt_allocs = allocs
-		print 'No work!'
+		print('No work!')
 	else:
 		opt_allocs = optimize(ni, nn, ranks, L, B, C, policy, min_master, min_slave)
 	integer_allocs = make_integer(ni, nn, opt_allocs, L, B, C, fill_idle)
@@ -382,17 +382,17 @@ def run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_master, min_s
 	return opt_allocs, integer_allocs
 
 def Usage(argv):
-	print argv[0], '   opts <number-of-iterations>'
-	print '   --help		 Show this help'
-	print '   --equal		 Assume equal loads, not indicated loads'
-	print '   --master		 All work on the master'
-	print '   --slaves		 No work on the master'
-	print '   --slave1		 Work only on the first slave'
-	print '   --loads l		 Specify the loads (comma-separated)'
-	print '   --min m		 Set minimum allocation per instance to m cores'
-	print '   --monitor secs Monitor load over past time period of given length'
-	print '   --wait secs	 Wait time between rebalancings'
-	print '   --no-fill      Do not use whole nodes if not necessary'
+	print(argv[0], '   opts <number-of-iterations>')
+	print('   --help		 Show this help')
+	print('   --equal		 Assume equal loads, not indicated loads')
+	print('   --master		 All work on the master')
+	print('   --slaves		 No work on the master')
+	print('   --slave1		 Work only on the first slave')
+	print('   --loads l		 Specify the loads (comma-separated)')
+	print('   --min m		 Set minimum allocation per instance to m cores')
+	print('   --monitor secs Monitor load over past time period of given length')
+	print('   --wait secs	 Wait time between rebalancings')
+	print('   --no-fill      Do not use whole nodes if not necessary')
 
 def main(argv):
 
@@ -409,9 +409,9 @@ def main(argv):
 		                                            "slaves", "slave1", "loads=",
 													"min=", 'min-master=', 'min-slave=',
 													'wait=', 'monitor=', 'no-fill'])
-	except getopt.error, msg:
-		print msg
-		print "for help use --help"
+	except getopt.error as msg:
+		print(msg)
+		print("for help use --help")
 		return 2
 	for o,a in opts:
 		if o in ('-h', '--help'):
@@ -420,7 +420,7 @@ def main(argv):
 			equal = True
 		elif o in ('--master', '--slaves', '--slave1'):
 			policy = o[2:]
-			print 'policy', policy
+			print('policy', policy)
 		elif o == '--loads':
 			cmdloads = a
 		elif o == '--min-master':
@@ -449,7 +449,7 @@ def main(argv):
 	niter = 1
 	if len(args) == 1:
 		niter = int(args[0])
-	# print 'Number of iterations', niter
+	# print('Number of iterations', niter)
 	did_rebalance = False
 	for it in range(0,niter):
 		if it > 0:
@@ -459,7 +459,7 @@ def main(argv):
 			else:
 				time.sleep(1)
 			if os.path.exists('.kill'):
-				print 'Rebalance.py killed by .kill file'
+				print('Rebalance.py killed by .kill file')
 				os.system('rm .kill')
 				break
 		x = read_current_alloc()
@@ -469,7 +469,7 @@ def main(argv):
 			continue
 		extranktonode, extranktogroup, ni, nn, ranks, allocs, nanosloads = x
 		topology = make_topology(ni, nn, nanosloads)
-		# print 'nanosloads', nanosloads
+		# print('nanosloads', nanosloads)
 
 		# Modify problem depending on the policy
 		if equal:
@@ -484,15 +484,15 @@ def main(argv):
 			for (group,node),load in nanosloads.items():
 				loads[group] += load
 
-		print 'Current allocation'
+		print('Current allocation')
 		printout(ni,nn,ranks,allocs,loads)
 
 		opt_allocs, integer_allocs = run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_master, min_slave, fill_idle)
 
-		print 'Optimized allocation'
+		print('Optimized allocation')
 		printout(ni,nn,ranks,opt_allocs,loads)
 
-		print 'Integer allocation'
+		print('Integer allocation')
 		printout(ni,nn,ranks,integer_allocs,loads)
 		did_rebalance = True
 
