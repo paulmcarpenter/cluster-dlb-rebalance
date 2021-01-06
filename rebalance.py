@@ -312,7 +312,7 @@ def make_integer(ni, nn, allocs, L, B, C, fill_idle):
 			frac_lost_and_j.reverse()
 
 			# Number of cores not used so far
-			num_unused_cores = C[group] - sum(ncores_int)
+			num_unused_cores = C[node] - sum(ncores_int)
 
 			if fill_idle:
 				# Use up all the unallocated cores on the node
