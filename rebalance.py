@@ -146,6 +146,7 @@ def printout(ni,nn,ranks,allocs,loads):
 			print('%10.3f ' % (load/total_c), end='')
 		else:
 			print('%10s' % 'inf', end='')
+		print()
 
 
 	used = []
