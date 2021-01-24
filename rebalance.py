@@ -1,11 +1,16 @@
 #! /usr/bin/env python
 import os
 import sys
-import cvxopt
 import re
 import time
 import getopt
-from cvxopt import matrix, solvers
+
+try:
+	import cvxopt
+	from cvxopt import matrix, solvers
+	canImportCVXOPT = True
+except ImportError:
+	canImportCVXOPT = False
 
 from os import listdir
 
@@ -397,6 +402,13 @@ def Usage(argv):
 
 def main(argv):
 
+	if not canImportCVXOPT:
+		if len(argv) >= 2 and argv[1] == '--recurse':
+			print('Error with recursive invocation')
+			return 1
+		ret = os.system('module load python/3.6.1; python ' + argv[0] + ' --recurse ' + ' '.join(argv[1:]))
+		return ret
+
 	global monitor_time
 	equal = False
 	policy = 'optimized'
@@ -409,7 +421,7 @@ def main(argv):
 		opts, args = getopt.getopt( argv[1:], "h", ["help", "equal", "master",
 		                                            "slaves", "slave1", "loads=",
 													"min=", 'min-master=', 'min-slave=',
-													'wait=', 'monitor=', 'no-fill'])
+													'wait=', 'monitor=', 'no-fill', 'recurse'])
 	except getopt.error as msg:
 		print(msg)
 		print("for help use --help")
@@ -441,6 +453,9 @@ def main(argv):
 			monitor_time = float(a)
 		elif o == '--no-fill':
 			fill_idle = False
+		elif o == '--recurse':
+			pass
+
 
 	if min_master is None:
 		min_master = 1
