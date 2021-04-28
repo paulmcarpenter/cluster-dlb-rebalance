@@ -66,7 +66,7 @@ def read_current_alloc():
 
 		extrank2 = read_map_entry('externalRank', f.readline())
 		assert extrank2 == extrank
-		groupNum = read_map_entry('groupNum', f.readline())
+		groupNum = read_map_entry('apprankNum', f.readline())
 		internalRank = read_map_entry('internalRank', f.readline())
 		nodeNum = read_map_entry('nodeNum', f.readline())
 
