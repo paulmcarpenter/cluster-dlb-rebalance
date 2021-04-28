@@ -58,7 +58,7 @@ def read_current_alloc():
 
 	ranks = {}
 	extranktonode = []
-	extranktogroup = []
+	extranktoapprank = []
 	for j, extrank in enumerate(sorted(extranks)):
 		if j != extrank:
 			return
@@ -66,16 +66,16 @@ def read_current_alloc():
 
 		extrank2 = read_map_entry('externalRank', f.readline())
 		assert extrank2 == extrank
-		groupNum = read_map_entry('apprankNum', f.readline())
+		apprankNum = read_map_entry('apprankNum', f.readline())
 		internalRank = read_map_entry('internalRank', f.readline())
 		nodeNum = read_map_entry('nodeNum', f.readline())
 
-		extranktogroup.append(groupNum)
+		extranktoapprank.append(apprankNum)
 		extranktonode.append(nodeNum)
-		ranks[ (groupNum,internalRank)] = nodeNum
+		ranks[ (apprankNum,internalRank)] = nodeNum
 		
-	# print('ranks(group, internalrank): ', ranks)
-	max_group = max(extranktogroup)
+	# print('ranks(apprank, internalrank): ', ranks)
+	max_apprank = max(extranktoapprank)
 	max_node = max(extranktonode)
 
 	fnames = os.listdir('.hybrid')
@@ -85,7 +85,7 @@ def read_current_alloc():
 		m = re.match(r'utilization([0-9]*)$', fname)
 		if m:
 			extrank = int(m.group(1))
-			group = extranktogroup[extrank]
+			apprank = extranktoapprank[extrank]
 			node = extranktonode[extrank]
 
 			f = open('.hybrid/' + fname)
@@ -103,21 +103,21 @@ def read_current_alloc():
 			recent_log = [ (t,alloc,dlballoc,load) for (t,alloc,dlballoc,load) in log  if t >= end_time - monitor_time ]
 			# print('recent_log', recent_log)
 
-			assert not (group,node) in allocs
-			assert not (group,node) in loads
-			allocs[ (group,node) ] = average( [ alloc for (t,alloc,dlballoc,load) in recent_log])
-			loads[ (group,node) ] = average( [ load for (t,alloc,dlballoc,load) in recent_log])
+			assert not (apprank,node) in allocs
+			assert not (apprank,node) in loads
+			allocs[ (apprank,node) ] = average( [ alloc for (t,alloc,dlballoc,load) in recent_log])
+			loads[ (apprank,node) ] = average( [ load for (t,alloc,dlballoc,load) in recent_log])
 			f.close()
 		
-	return extranktonode, extranktogroup, max_group+1, max_node+1, ranks, allocs, loads
+	return extranktonode, extranktoapprank, max_apprank+1, max_node+1, ranks, allocs, loads
 	
 def write_new_alloc(ni, nn, ranks, B, opt_allocs):
-	for group in range(0,ni):
-		f = open('.hybrid/alloc%d' % group, 'w')
+	for apprank in range(0,ni):
+		f = open('.hybrid/alloc%d' % apprank, 'w')
 		for rank in range(0,nn):
-			if (group,rank) in ranks.keys():
-				node = ranks[(group,rank)]
-				print(opt_allocs[(group,node)], file=f)
+			if (apprank,rank) in ranks.keys():
+				node = ranks[(apprank,rank)]
+				print(opt_allocs[(apprank,node)], file=f)
 			else:
 				break
 		f.close()
@@ -126,25 +126,25 @@ def write_new_alloc(ni, nn, ranks, B, opt_allocs):
 	
 
 def printout(ni,nn,ranks,allocs,loads):
-	print('     ' + ' ' * 5 * nn + 'NUM CORES ' + ' ' * 6 * nn + 'Total_cores   Load	 Load/Total_cores')
-	print('     ' + ' ' * 5 * nn + '	 node	' + ' ' * 6 * nn + '	')
-	print('       ' + ('%11d' * nn) % tuple(range(0,nn)))
+	print('       ' + ' ' * 5 * nn + 'NUM CORES ' + ' ' * 6 * nn + 'Total_cores   Load	 Load/Total_cores')
+	print('       ' + ' ' * 5 * nn + '	 node	' + ' ' * 6 * nn + '	')
+	print('         ' + ('%11d' * nn) % tuple(range(0,nn)))
 
-	for group in range(0, ni):
-		print('Group %2d ' % group, end='')
+	for apprank in range(0, ni):
+		print('Apprank %2d ' % apprank, end='')
 		for node in range(0, nn):
-			if (group,node) in allocs:
-				print('%9.2f ' % allocs[(group,node)], end='')
-				if ranks[(group,0)] == node:
+			if (apprank,node) in allocs:
+				print('%9.2f ' % allocs[(apprank,node)], end='')
+				if ranks[(apprank,0)] == node:
 					print('# ', end='')
 				else:
 					print(' ', end='')
 			else:
 				print('%11s ' % '-', end='')
-		load = loads[group]
+		load = loads[apprank]
 		total_c = 0
 		for node in range(0, nn):
-			total_c += allocs.get((group,node),0)
+			total_c += allocs.get((apprank,node),0)
 		print('%10.2f ' % total_c, end='')
 		print('%10.2f ' % load, end='')
 		if total_c > 0:
@@ -157,11 +157,11 @@ def printout(ni,nn,ranks,allocs,loads):
 	used = []
 	for node in range(0,nn):
 		u = 0
-		for group in range(0,ni):
-			u += allocs.get((group,node),0)
+		for apprank in range(0,ni):
+			u += allocs.get((apprank,node),0)
 		used.append(u)
-	print('      ' + ('%10s' % '---') * nn)
-	print('      ' + ('%10.2f' * nn) % tuple(used))
+	print('        ' + ('%10s' % '---') * nn)
+	print('        ' + ('%10.2f' * nn) % tuple(used))
 
 def optimize(ni, nn, ranks, L, B, C, policy, min_master, min_slave):
 	# Minimise		-t										  (i.e. maximise worst-case cores per load)
@@ -182,29 +182,29 @@ def optimize(ni, nn, ranks, L, B, C, policy, min_master, min_slave):
 	# Variables are t, a_ij  (but only when B_ij = 1; otherwise will get bogus values for the other a_ij)
 
 	# All a_{ij}
-	entries_all = [(group,node) for group in range(0,ni)  
+	entries_all = [(apprank,node) for apprank in range(0,ni)  
 								for node in range(0,nn) 
-									if B[group,node] != 0]
+									if B[apprank,node] != 0]
 
 	pos_all = range(0, len(entries_all))
-	#  For which (group,node) are the a_{ij} variable?
+	#  For which (apprank,node) are the a_{ij} variable?
 	if policy == 'optimized':
 		# Optimized: have all a_ij
 		pos_var = pos_all
 		
 	elif policy == 'master':
 		# Only have masters
-		pos_var = [j for j,(group,node) in enumerate(entries_all) 
-										if ranks[(group,0)] == node ]
+		pos_var = [j for j,(apprank,node) in enumerate(entries_all) 
+										if ranks[(apprank,0)] == node ]
 	elif policy == 'slaves':
 		# Only have slaves 
-		pos_var = [j for j,(group,node) in enumerate(entries_all)
-										if B[group,node] != 0 and ranks[(group,0)] != node ]
+		pos_var = [j for j,(apprank,node) in enumerate(entries_all)
+										if B[apprank,node] != 0 and ranks[(apprank,0)] != node ]
 
 	elif policy == 'slave1':
 		# Only have slave 1
-		pos_var = [j for j,(group,node) in enumerate(entries_all)
-										if ranks[(group,1)] == node ]
+		pos_var = [j for j,(apprank,node) in enumerate(entries_all)
+										if ranks[(apprank,1)] == node ]
 	else:
 		assert False
 
@@ -223,9 +223,9 @@ def optimize(ni, nn, ranks, L, B, C, policy, min_master, min_slave):
 	# Constraints [1]: one per node
 	for node in range(0,nn):
 		row = [0.0] #  coefficient of t is zero in [3]
-		for (group,n) in entries_all:
+		for (apprank,n) in entries_all:
 			if n == node:
-				if ranks[(group,0)] == node:
+				if ranks[(apprank,0)] == node:
 					row.append(1.0)   # This variable has coefficient 1 in [1]
 				else:
 					row.append(1.00001)   # This variable has coefficient 1 in [1]
@@ -233,12 +233,12 @@ def optimize(ni, nn, ranks, L, B, C, policy, min_master, min_slave):
 				row.append(0)	# This variable has coefficient 0 in [1]
 		Ai.append(row)			# LHS of [1]
 		bi.append(C[node])		# RHS of [1]
-	# Constraints [2]: one per group
-	for group in range(0,ni):
-		# Sum up the nodes in this group
-		row = [L[group]]   # Coefficient of t is Lj (j=group)
+	# Constraints [2]: one per apprank
+	for apprank in range(0,ni):
+		# Sum up the nodes in this apprank
+		row = [L[apprank]]   # Coefficient of t is Lj (j=apprank)
 		for (i,node) in entries_all:
-			if i == group:				   # Variable affects this group
+			if i == apprank:				   # Variable affects this apprank
 				row.append(-1.0)
 			else:
 				row.append(0.0)
@@ -246,22 +246,22 @@ def optimize(ni, nn, ranks, L, B, C, policy, min_master, min_slave):
 		bi.append(0.0)		   # RHS of [2]
 	# Constraints [3]: for variable entries
 	for k in pos_var:
-		group,node = entries_all[k]
+		apprank,node = entries_all[k]
 		row = [0.0] * num_variables
 		row[k+1] = -1.0
 		Ai.append(row)		  # LHS of [3]
-		if ranks[(group,0)] == node:
+		if ranks[(apprank,0)] == node:
 			bi.append(-min_master)			# RHS of [3b]
 		else:
 			bi.append(-min_slave)			# RHS of [3a]
 	# Fixed entries (fixed to min_alloc)
 	for k in pos_fixed:
-		group,node = entries_all[k]
-		if ranks[(group,0)] == node:
+		apprank,node = entries_all[k]
+		if ranks[(apprank,0)] == node:
 			min_alloc = min_master
 		else:
 			min_alloc = min_slave
-		print('a_ij', group, node, 'must be', min_alloc)
+		print('a_ij', apprank, node, 'must be', min_alloc)
 		# a_ij >= min_alloc
 		row = [0.0] * num_variables
 		row[k+1] = -1.0
@@ -284,15 +284,15 @@ def optimize(ni, nn, ranks, L, B, C, policy, min_master, min_slave):
 	sol = solvers.lp( c, A, b)
 
 	opt_allocs = {}
-	for k,(group,node) in enumerate(entries_all):
-			opt_allocs[(group,node)] = sol['x'][1 + k]
+	for k,(apprank,node) in enumerate(entries_all):
+			opt_allocs[(apprank,node)] = sol['x'][1 + k]
 
-	for group in range(0,ni):
+	for apprank in range(0,ni):
 		for node in range(0,nn):
-			if B[group,node] != 0:
-				if not (group,node) in opt_allocs:
+			if B[apprank,node] != 0:
+				if not (apprank,node) in opt_allocs:
 					assert policy != 'optimized' # only happens when possibilities set to zero
-					opt_allocs[(group,node)] = 0.0
+					opt_allocs[(apprank,node)] = 0.0
 
 	return opt_allocs
 
@@ -300,16 +300,16 @@ def optimize(ni, nn, ranks, L, B, C, policy, min_master, min_slave):
 def make_integer(ni, nn, allocs, L, B, C, fill_idle):
 	int_allocs = {}
 	for node in range(0,nn):
-		indices = [group for group in range(0,ni) if B[(group,node)]>0 and allocs[(group,node)] > 0 ]
+		indices = [apprank for apprank in range(0,ni) if B[(apprank,node)]>0 and allocs[(apprank,node)] > 0 ]
 
 		if len(indices) > 0:
-			ncores		= [allocs[(group,node)] for group in indices]
-			ncores_int	= [int(allocs[(group,node)]) for group in indices]
-			total_cores = [sum([allocs[(group,n)] for n in range(0,nn) if B[(group,n)]>0]) for group in indices]
+			ncores		= [allocs[(apprank,node)] for apprank in indices]
+			ncores_int	= [int(allocs[(apprank,node)]) for apprank in indices]
+			total_cores = [sum([allocs[(apprank,n)] for n in range(0,nn) if B[(apprank,n)]>0]) for apprank in indices]
 			# load_per_cores = [L[indices[j]] / total_cores[j] for j in range(0,len(total_cores))]
 			# print('node', node, 'indices', indices, 'cores', ncores, 'total_cores', total_cores, 'lpc', load_per_cores)
 
-			# After rebalancing, all groups should have the same load-per-core
+			# After rebalancing, all appranks should have the same load-per-core
 			# Hence the slowdown is proportional to the fraction lost: (ncores - int(ncores)) / total_cores
 			frac_lost_and_j = [(1.0 * (ncores[j] - int(ncores[j])) / total_cores[j],j) for j in range(0,len(total_cores))]
 			# print('node', node, 'indices', indices, 'cores', ncores, 'total_cores', total_cores, 'frac_lost', frac_lost_and_j)
@@ -335,24 +335,24 @@ def make_integer(ni, nn, allocs, L, B, C, fill_idle):
 				frac,j = frac_lost_and_j[c % len(frac_lost_and_j)]
 				ncores_int[j] = ncores_int[j] + 1
 
-		for j,group in enumerate(indices):
-			int_allocs[(group,node)] = ncores_int[j]
+		for j,apprank in enumerate(indices):
+			int_allocs[(apprank,node)] = ncores_int[j]
 
 	# Lost the zeros: put them back
-	for group in range(0,ni):
+	for apprank in range(0,ni):
 		for node in range(0,nn):
-			if B[(group,node)]>0:
-				int_allocs[(group,node)] = int_allocs.get((group,node),0)
+			if B[(apprank,node)]>0:
+				int_allocs[(apprank,node)] = int_allocs.get((apprank,node),0)
 	return int_allocs
 
 
 def make_topology(ni, nn, nanosloads):
 	Brows = []
-	for group in range(0,ni):
+	for apprank in range(0,ni):
 		load = 0
 		Brow = []
 		for node in range(0,nn):
-			if (group,node) in nanosloads:
+			if (apprank,node) in nanosloads:
 				Brow.append(1.0)
 			else:
 				Brow.append(0.0)
@@ -483,7 +483,7 @@ def main(argv):
 			# Happens if program changes: just wait and try again
 			did_rebalance = False
 			continue
-		extranktonode, extranktogroup, ni, nn, ranks, allocs, nanosloads = x
+		extranktonode, extranktoapprank, ni, nn, ranks, allocs, nanosloads = x
 		topology = make_topology(ni, nn, nanosloads)
 		# print('nanosloads', nanosloads)
 
@@ -497,8 +497,8 @@ def main(argv):
 		else:
 			# Use loads provided by Nanos
 			loads = [0.0] * ni
-			for (group,node),load in nanosloads.items():
-				loads[group] += load
+			for (apprank,node),load in nanosloads.items():
+				loads[apprank] += load
 
 		print('Current allocation')
 		printout(ni,nn,ranks,allocs,loads)
