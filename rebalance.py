@@ -15,6 +15,7 @@ except ImportError:
 from os import listdir
 
 monitor_time = 1.0
+hybrid_directory = '.hybrid'
 
 def average(l):
 	return sum(l) / len(l)
@@ -43,10 +44,10 @@ def read_map_entry(label, line):
 
 def read_current_alloc():
 	global monitor_time
-	if not os.path.exists('.hybrid'):
+	if not os.path.exists(hybrid_directory):
 		return None
 	# Read map files
-	mapfiles = [f for f in os.listdir('.hybrid') if f.startswith('map')]
+	mapfiles = [f for f in os.listdir(hybrid_directory) if f.startswith('map')]
 
 	# Get all the external ranks for which we have a map file
 	extranks = []
@@ -62,7 +63,7 @@ def read_current_alloc():
 	for j, extrank in enumerate(sorted(extranks)):
 		if j != extrank:
 			return
-		f = open('.hybrid/map%d' % extrank, 'r')
+		f = open(hybrid_directory + '/map%d' % extrank, 'r')
 
 		extrank2 = read_map_entry('externalRank', f.readline())
 		assert extrank2 == extrank
@@ -78,7 +79,7 @@ def read_current_alloc():
 	max_apprank = max(extranktoapprank)
 	max_node = max(extranktonode)
 
-	fnames = os.listdir('.hybrid')
+	fnames = os.listdir(hybrid_directory)
 	allocs = {}
 	loads = {}
 	for fname in fnames:
@@ -88,7 +89,7 @@ def read_current_alloc():
 			apprank = extranktoapprank[extrank]
 			node = extranktonode[extrank]
 
-			f = open('.hybrid/' + fname)
+			f = open(hybrid_directory + '/' + fname)
 			line = None
 			log = []
 			for line in f.readlines():
@@ -113,7 +114,7 @@ def read_current_alloc():
 	
 def write_new_alloc(ni, nn, ranks, B, opt_allocs):
 	for apprank in range(0,ni):
-		f = open('.hybrid/alloc%d' % apprank, 'w')
+		f = open(hybrid_directory + '/alloc%d' % apprank, 'w')
 		for rank in range(0,nn):
 			if (apprank,rank) in ranks.keys():
 				node = ranks[(apprank,rank)]
@@ -389,16 +390,17 @@ def run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_master, min_s
 
 def Usage(argv):
 	print(argv[0], '   opts <number-of-iterations>')
-	print('   --help		 Show this help')
-	print('   --equal		 Assume equal loads, not indicated loads')
-	print('   --master		 All work on the master')
-	print('   --slaves		 No work on the master')
-	print('   --slave1		 Work only on the first slave')
-	print('   --loads l		 Specify the loads (comma-separated)')
-	print('   --min m		 Set minimum allocation per instance to m cores')
-	print('   --monitor secs Monitor load over past time period of given length')
-	print('   --wait secs	 Wait time between rebalancings')
-	print('   --no-fill      Do not use whole nodes if not necessary')
+	print('   --help		         Show this help')
+	print('   --equal		         Assume equal loads, not indicated loads')
+	print('   --master		         All work on the master')
+	print('   --slaves		         No work on the master')
+	print('   --slave1		         Work only on the first slave')
+	print('   --loads l		         Specify the loads (comma-separated)')
+	print('   --min m		         Set minimum allocation per instance to m cores')
+	print('   --monitor secs         Monitor load over past time period of given length')
+	print('   --wait secs	         Wait time between rebalancings')
+	print('   --no-fill              Do not use whole nodes if not necessary')
+	print('   --hybrid-directory d   Path to hybrid-directory: default .hybrid')
 
 def main(argv):
 
@@ -410,6 +412,8 @@ def main(argv):
 		return ret
 
 	global monitor_time
+	global hybrid_directory
+
 	equal = False
 	policy = 'optimized'
 	cmdloads = None
@@ -421,7 +425,7 @@ def main(argv):
 		opts, args = getopt.getopt( argv[1:], "h", ["help", "equal", "master",
 		                                            "slaves", "slave1", "loads=",
 													"min=", 'min-master=', 'min-slave=',
-													'wait=', 'monitor=', 'no-fill', 'recurse'])
+													'wait=', 'monitor=', 'no-fill', 'recurse', 'hybrid-directory='])
 	except getopt.error as msg:
 		print(msg)
 		print("for help use --help")
@@ -455,7 +459,8 @@ def main(argv):
 			fill_idle = False
 		elif o == '--recurse':
 			pass
-
+		elif o == '--hybrid-directory':
+			hybrid_directory = a
 
 	if min_master is None:
 		min_master = 1
