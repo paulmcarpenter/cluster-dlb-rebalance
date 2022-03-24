@@ -122,7 +122,7 @@ def read_current_alloc():
 
 	print('baseline_alloc', baseline_alloc)
 
-	G = networkx.Graph()
+	G = networkx.DiGraph()
 	for nodeNum in range(0,num_nodes):
 		G.add_node(node(nodeNum))
 	for vrankNum in range(0,num_vranks):
@@ -154,11 +154,17 @@ def read_current_alloc():
 
 			assert not (apprank,nodeNum) in allocs
 			assert not (apprank,nodeNum) in loads
-			allocs[ (apprank,nodeNum) ] = average( [ alloc for (t,alloc,dlballoc,load) in recent_log]) - baseline_alloc[(apprank,nodeNum)]
+			delta_alloc = average( [ alloc for (t,alloc,dlballoc,load) in recent_log]) - baseline_alloc[(apprank,nodeNum)]
+			if delta_alloc > 0:
+				G.add_edge(vrank(apprank), node(nodeNum), capacity=delta_alloc)
+			else:
+				G.add_edge(node(nodeNum), vrank(apprank), capacity=-delta_alloc)
+
+			allocs[ (apprank,nodeNum) ] = delta_alloc
 			loads[ (apprank,nodeNum) ] = average( [ load for (t,alloc,dlballoc,load) in recent_log])
 			f.close()
 		
-	return extranktonode, extranktoapprank, num_vranks, num_nodes, ranks, allocs, loads
+	return extranktonode, extranktoapprank, num_vranks, num_nodes, ranks, allocs, loads, G
 	
 def write_new_alloc(ni, nn, ranks, B, opt_allocs):
 	for apprank in range(0,ni):
@@ -510,17 +516,21 @@ def main(argv):
 				os.system('rm .kill')
 				break
 		x = read_current_alloc()
-		print(x)
 		if x is None:
 			# Happens if program changes: just wait and try again
 			did_rebalance = False
 			continue
-		extranktonode, extranktoapprank, ni, nn, ranks, allocs, nanosloads = x
+		extranktonode, extranktoapprank, ni, nn, ranks, allocs, nanosloads, G = x
 		#topology = make_topology(ni, nn, nanosloads)
 		# print('nanosloads', nanosloads)
 
 		print('Current allocation')
 		printout(ni,nn,ranks,allocs)
+
+		for vrankNum in range(0,ni):
+			v = vrank(vrankNum)
+			mf = networkx.maximum_flow(G, v, v)
+			print('Apprank', vrankNum, 'flow', mf)
 
 		# opt_allocs, integer_allocs = run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_master, min_slave, fill_idle)
 

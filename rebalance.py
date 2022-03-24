@@ -18,6 +18,7 @@ from os import listdir
 
 monitor_time = 1.0
 hybrid_directory = '.hybrid'
+local_kill_cycles = False
 
 def average(l):
 	return sum(l) / len(l)
@@ -107,8 +108,12 @@ def read_current_alloc():
 				s = line.strip().split(' ')
 				if len(s) < 4:
 					return None
+				if local_kill_cycles:
+					alloc = int(s[11]) # owned
+				else:
+					alloc = int(s[1])
 				#           Timestamp     Global alloc   curr DLB alloc  Total busy cores
-				log.append( (float(s[0]), int(s[1]),     int(s[2]),      float(s[3])) )
+				log.append( (float(s[0]), alloc,     int(s[2]),      float(s[3])) )
 			if len(log) == 0:
 				return None
 			end_time = log[-1][0]
@@ -117,6 +122,7 @@ def read_current_alloc():
 
 			assert not (apprank,node) in allocs
 			assert not (apprank,node) in loads
+
 			allocs[ (apprank,node) ] = average( [ alloc for (t,alloc,dlballoc,load) in recent_log])
 			loads[ (apprank,node) ] = average( [ load for (t,alloc,dlballoc,load) in recent_log])
 			f.close()
@@ -412,6 +418,7 @@ def Usage(argv):
 	print('   --wait secs	         Wait time between rebalancings')
 	print('   --no-fill              Do not use whole nodes if not necessary')
 	print('   --hybrid-directory d   Path to hybrid-directory: default .hybrid')
+	print('   --local                Kill cycles when using local policy')
 
 def main(argv):
 	print('Start rebalance')
@@ -425,6 +432,7 @@ def main(argv):
 
 	global monitor_time
 	global hybrid_directory
+	global local_kill_cycles
 
 	equal = False
 	policy = 'optimized'
@@ -437,7 +445,8 @@ def main(argv):
 		opts, args = getopt.getopt( argv[1:], "h", ["help", "equal", "master",
 		                                            "slaves", "slave1", "loads=",
 													"min=", 'min-master=', 'min-slave=',
-													'wait=', 'monitor=', 'no-fill', 'recurse', 'hybrid-directory='])
+													'wait=', 'monitor=', 'no-fill', 'recurse', 'hybrid-directory=',
+													'local'])
 	except getopt.error as msg:
 		print(msg)
 		print("for help use --help")
@@ -473,6 +482,8 @@ def main(argv):
 			pass
 		elif o == '--hybrid-directory':
 			hybrid_directory = a
+		elif o == '--local':
+			local_kill_cycles = True
 
 	if min_master is None:
 		min_master = 1
@@ -511,6 +522,18 @@ def main(argv):
 		elif not cmdloads is None:
 			# Use loads given on command line
 			loads = [float(x) for x in cmdloads.split(',')]
+		elif local_kill_cycles:
+			# Load is the total number of cores
+			print('Local: kill cycles', allocs, ni)
+			loads = []
+			for vrank in range(0, ni):
+				total_cores = 0
+				for (v,n),cores in allocs.items():
+					if v == vrank:
+						total_cores += cores
+				loads.append(total_cores)
+			print(loads)
+				
 		else:
 			# Use loads provided by Nanos
 			loads = [0.0] * ni
