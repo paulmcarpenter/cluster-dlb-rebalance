@@ -8,8 +8,10 @@ import getopt
 try:
 	import cvxopt
 	from cvxopt import matrix, solvers
+	print('Can import cvxopt')
 	canImportCVXOPT = True
 except ImportError:
+	print('Cant import cvxopt')
 	canImportCVXOPT = False
 
 from os import listdir
@@ -39,7 +41,8 @@ def isfloat(s):
 
 def read_map_entry(label, line):
 	s = line.split()
-	assert(s[0] == label)
+	if len(s) < 2 or s[0] != label:
+		return None
 	return int(s[1])
 
 def read_current_alloc():
@@ -70,11 +73,19 @@ def read_current_alloc():
 		apprankNum = read_map_entry('apprankNum', f.readline())
 		internalRank = read_map_entry('internalRank', f.readline())
 		nodeNum = read_map_entry('nodeNum', f.readline())
+		indexThisnode = read_map_entry('indexThisNode', f.readline())
+		cpusOnNode = read_map_entry('cpusOnNode', f.readline())
+
+		if cpusOnNode is None:
+			return None
 
 		extranktoapprank.append(apprankNum)
 		extranktonode.append(nodeNum)
 		ranks[ (apprankNum,internalRank)] = nodeNum
 		
+	if len(extranks) == 0:
+		return None
+
 	# print('ranks(apprank, internalrank): ', ranks)
 	max_apprank = max(extranktoapprank)
 	max_node = max(extranktonode)
@@ -403,6 +414,7 @@ def Usage(argv):
 	print('   --hybrid-directory d   Path to hybrid-directory: default .hybrid')
 
 def main(argv):
+	print('Start rebalance')
 
 	if not canImportCVXOPT:
 		if len(argv) >= 2 and argv[1] == '--recurse':
