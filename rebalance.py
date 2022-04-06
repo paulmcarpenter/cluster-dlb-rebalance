@@ -502,9 +502,9 @@ def main(argv):
 				time.sleep(wait_time)
 			else:
 				time.sleep(1)
-			if os.path.exists('.kill'):
+			if os.path.exists(hybrid_directory + '/.kill'):
 				print('Rebalance.py killed by .kill file')
-				os.system('rm .kill')
+				os.system(f'rm {hybrid_directory}/.kill')
 				break
 		x = read_current_alloc()
 		if x is None:
