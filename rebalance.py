@@ -95,6 +95,9 @@ def read_current_alloc():
 	fnames = os.listdir(hybrid_directory)
 	allocs = {}
 	loads = {}
+
+	maxBytesNeeded = monitor_time * 1000
+
 	for fname in fnames:
 		m = re.match(r'utilization([0-9]*)$', fname)
 		if m:
@@ -104,11 +107,17 @@ def read_current_alloc():
 			apprank = extranktoapprank[extrank]
 			node = extranktonode[extrank]
 
-			f = open(hybrid_directory + '/' + fname)
+			utilfilename = hybrid_directory + '/' + fname
+			filesize = os.path.getsize(utilfilename)
+			f = open(utilfilename)
+			if filesize > maxBytesNeeded:
+				f.seek(filesize-maxBytesNeeded, 0)
+				line = f.readline()
+
 			line = None
 			log = []
-			for line in f.readlines():
-				s = line.strip().split(' ')
+			for line in f:
+				s = line.split(' ')
 				if len(s) < 4:
 					return None
 				if local_kill_cycles:
