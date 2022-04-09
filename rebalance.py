@@ -98,6 +98,8 @@ def read_current_alloc():
 		m = re.match(r'utilization([0-9]*)$', fname)
 		if m:
 			extrank = int(m.group(1))
+			if extrank >= len(extranktoapprank):
+				return None
 			apprank = extranktoapprank[extrank]
 			node = extranktonode[extrank]
 
