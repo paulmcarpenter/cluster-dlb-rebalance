@@ -19,6 +19,7 @@ from os import listdir
 monitor_time = 1.0
 hybrid_directory = '.hybrid'
 local_kill_cycles = False
+verbose_print = None
 
 def average(l):
 	return sum(l) / len(l)
@@ -421,6 +422,8 @@ def Usage(argv):
 	print('   --no-fill              Do not use whole nodes if not necessary')
 	print('   --hybrid-directory d   Path to hybrid-directory: default .hybrid')
 	print('   --local                Kill cycles when using local policy')
+	print('   --concise              Concise print (default if >1 iteration)')
+	print('   --verbose              Verbose print (default if 1 iteration)')
 
 def main(argv):
 	print('Start rebalance')
@@ -435,6 +438,7 @@ def main(argv):
 	global monitor_time
 	global hybrid_directory
 	global local_kill_cycles
+	global verbose_print
 
 	equal = False
 	policy = 'optimized'
@@ -448,7 +452,7 @@ def main(argv):
 		                                            "slaves", "slave1", "loads=",
 													"min=", 'min-master=', 'min-slave=',
 													'wait=', 'monitor=', 'no-fill', 'recurse', 'hybrid-directory=',
-													'local'])
+													'local', 'concise', 'verbose'])
 	except getopt.error as msg:
 		print(msg)
 		print("for help use --help")
@@ -486,6 +490,10 @@ def main(argv):
 			hybrid_directory = a
 		elif o == '--local':
 			local_kill_cycles = True
+		elif o == '--concise':
+			verbose_print = False
+		elif o == '--verbose':
+			verbose_print = True
 
 	if min_master is None:
 		min_master = 1
@@ -495,6 +503,10 @@ def main(argv):
 	niter = 1
 	if len(args) == 1:
 		niter = int(args[0])
+	
+	if verbose_print is None:
+		verbose_print = (niter == 1)
+
 	# print('Number of iterations', niter)
 	did_rebalance = False
 	for it in range(0,niter):
@@ -542,16 +554,31 @@ def main(argv):
 			for (apprank,node),load in nanosloads.items():
 				loads[apprank] += load
 
-		print('Current allocation')
-		printout(ni,nn,ranks,allocs,loads)
+		if verbose_print:
+			print('Current allocation')
+			printout(ni,nn,ranks,allocs,loads)
 
 		opt_allocs, integer_allocs = run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_master, min_slave, fill_idle)
 
-		print('Optimized allocation')
-		printout(ni,nn,ranks,opt_allocs,loads)
+		if verbose_print:
+			print('Optimized allocation')
+			printout(ni,nn,ranks,opt_allocs,loads)
 
-		print('Integer allocation')
-		printout(ni,nn,ranks,integer_allocs,loads)
+			print('Integer allocation')
+			printout(ni,nn,ranks,integer_allocs,loads)
+		else:
+			print(f'Iter={it} Load/Total_cores: ', end='')
+			for apprank in range(0,ni):
+				load = loads[apprank]
+				total_c = 0
+				for node in range(0, nn):
+					total_c += allocs.get((apprank,node),0)
+				if total_c > 0:
+					print('%6.3f ' % (load/total_c), end='')
+				else:
+					print('%6s' % 'inf', end='')
+			print()
+
 		did_rebalance = True
 
 
