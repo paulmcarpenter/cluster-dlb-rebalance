@@ -20,6 +20,7 @@ monitor_time = 1.0
 hybrid_directory = '.hybrid'
 local_kill_cycles = False
 verbose_print = None
+num_cores_per_node = None
 
 def average(l):
 	return sum(l) / len(l)
@@ -49,6 +50,7 @@ def read_map_entry(label, line):
 
 def read_current_alloc():
 	global monitor_time
+	global num_cores_per_node
 	if not os.path.exists(hybrid_directory):
 		return None
 	# Read map files
@@ -80,6 +82,12 @@ def read_current_alloc():
 
 		if cpusOnNode is None:
 			return None
+
+		if num_cores_per_node is None:
+		    num_cores_per_node = cpusOnNode
+		else:
+		    # All nodes have the same number of cores
+		    assert cpusOnNode == num_cores_per_node
 
 		extranktoapprank.append(apprankNum)
 		extranktonode.append(nodeNum)
@@ -403,7 +411,7 @@ def run_policy(ni, nn, ranks, allocs, topology, loads, policy, min_master, min_s
 	B = matrix(topology).trans()
 
 	# Available cores vector
-	C = matrix( [[48]] * nn).trans()
+	C = matrix( [[num_cores_per_node]] * nn).trans()
 
 	if max(L) == 0.0:
 		# Currently no work!!!
